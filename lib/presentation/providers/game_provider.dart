@@ -57,6 +57,7 @@ class GameProvider extends ChangeNotifier {
   /// 게임 틱 타이머 (자동 채굴)
   Timer? _tickTimer;
   DateTime _lastTick = DateTime.now();
+  int _tickCounter = 0;
 
   // === 초기화 / 종료 ===
 
@@ -102,12 +103,16 @@ class GameProvider extends ChangeNotifier {
     });
   }
 
-  /// 자동 채굴 적용
+  /// 자동 채굴 적용 — 광물은 매 tick 누적하되 UI는 1초에 한 번만 알림
   void _tick(double dt) {
     final rate = IdleCalculator.oreRatePerSecond(_state);
     if (rate <= 0) return;
     _state = _state.copyWith(ore: _state.ore + rate * dt);
-    notifyListeners();
+    _tickCounter++;
+    if (_tickCounter >= 4) {
+      _tickCounter = 0;
+      notifyListeners();
+    }
   }
 
   // === 광물 / 코인 (전투 시스템에서 호출) ===

@@ -86,48 +86,69 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   Widget build(BuildContext context) {
-    final game = ref.watch(gameProvider);
-    final state = game.state;
-
-    // 광맥/조수 상태 변화 동기화
-    if (_game != null) {
-      if (state.layer != _lastLayer) {
-        _lastLayer = state.layer;
-        _game!.syncLayer(state.layer);
-      }
-      final hh = _hashHelpers();
-      if (hh != _lastHelperHash) {
-        _lastHelperHash = hh;
-        _game!.syncHelpers();
-      }
-    }
-
     return Scaffold(
       backgroundColor: AppColors.deepShaft,
       body: SafeArea(
         child: Column(
           children: [
-            _topBar(state),
+            // 상단바는 화폐만 보면 되므로 별도 Consumer로 격리
+            Consumer(
+              builder: (_, ref, __) {
+                ref.watch(gameProvider);
+                return _topBar(null);
+              },
+            ),
             Expanded(
               child: Stack(
                 children: [
-                  _gameView(),
-                  if (game.activeSpirit != null)
-                    Positioned(
-                      top: 24,
-                      right: 16,
-                      child: _SpiritBadge(
-                        onTap: () => game.claimSpirit(),
-                      ),
-                    ),
+                  // GameWidget은 절대 부모 리빌드의 영향을 받지 않게 분리.
+                  // _game 인스턴스는 안정적이므로 RepaintBoundary로 격리.
+                  RepaintBoundary(child: _gameView()),
+                  // 산신령 배지만 별도 Consumer
+                  Consumer(
+                    builder: (_, ref, __) {
+                      final game = ref.watch(gameProvider);
+                      // 광맥/조수 동기화는 여기서만 수행
+                      _maybeSyncGame(game.state);
+                      if (game.activeSpirit == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return Positioned(
+                        top: 24,
+                        right: 16,
+                        child: _SpiritBadge(
+                          onTap: () => game.claimSpirit(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
-            _bottomBar(state),
+            // 하단바도 별도 Consumer
+            Consumer(
+              builder: (_, ref, __) {
+                final game = ref.watch(gameProvider);
+                return _bottomBar(game.state);
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _maybeSyncGame(dynamic state) {
+    if (_game == null) return;
+    if (state.layer != _lastLayer) {
+      _lastLayer = state.layer;
+      _game!.syncLayer(state.layer);
+    }
+    final hh = _hashHelpers();
+    if (hh != _lastHelperHash) {
+      _lastHelperHash = hh;
+      _game!.syncHelpers();
+    }
   }
 
   Widget _gameView() {
@@ -136,7 +157,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
         child: CircularProgressIndicator(color: AppColors.gold),
       );
     }
-    return GameWidget(game: _game!);
+    return GameWidget(
+      key: const ValueKey('starlit-mine-game'),
+      game: _game!,
+    );
   }
 
   Widget _topBar(dynamic state) {
