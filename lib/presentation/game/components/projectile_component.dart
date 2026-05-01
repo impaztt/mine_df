@@ -14,7 +14,11 @@ class ProjectileComponent extends PositionComponent {
     required this.target,
     required this.damage,
     required this.speed,
-  }) : super(size: Vector2.all(16), anchor: Anchor.center);
+  }) : super(
+          size: Vector2.all(28),
+          anchor: Anchor.center,
+          priority: 1000,
+        );
 
   final OreDef ore;
   final EnemyComponent target;
@@ -23,6 +27,10 @@ class ProjectileComponent extends PositionComponent {
 
   double _spin = 0;
   double _life = 0;
+
+  /// 트레일을 위한 이전 위치 기록
+  final List<Vector2> _trail = [];
+  static const int _trailMax = 6;
 
   @override
   void update(double dt) {
@@ -52,26 +60,49 @@ class ProjectileComponent extends PositionComponent {
         return;
       }
     }
+
+    // 트레일 기록 (월드 좌표 기준 — 컴포넌트 중심)
+    _trail.insert(0, position.clone());
+    if (_trail.length > _trailMax) {
+      _trail.removeLast();
+    }
   }
 
   @override
   void render(Canvas canvas) {
+    // === 트레일 (월드 좌표 → 로컬 좌표 보정) ===
+    // PositionComponent는 render 시 canvas 원점이 컴포넌트의 좌상단.
+    // 트레일은 월드 좌표이므로 현재 컴포넌트의 (월드)좌상단 만큼 빼서 그린다.
+    final originWorld = position - Vector2(size.x / 2, size.y / 2);
+    for (int i = 0; i < _trail.length; i++) {
+      final t = (1 - i / _trailMax);
+      final p = _trail[i] - originWorld;
+      canvas.drawCircle(
+        Offset(p.x, p.y),
+        4 + t * 4,
+        Paint()..color = ore.color.withValues(alpha: t * 0.55),
+      );
+    }
+
+    // === 발사체 본체 ===
     canvas.translate(size.x / 2, size.y / 2);
+
+    // 외부 글로우 (블러 없이 큰 반투명 원으로 대체 — web 호환)
+    for (int i = 3; i >= 1; i--) {
+      canvas.drawCircle(
+        Offset.zero,
+        4.0 + i * 2.5,
+        Paint()..color = ore.color.withValues(alpha: 0.18),
+      );
+    }
+
+    canvas.save();
     canvas.rotate(_spin);
 
-    // 발광 트레일
-    canvas.drawCircle(
-      Offset.zero,
-      11,
-      Paint()
-        ..color = ore.color.withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
-
-    // 광물 다각형 (보석 모양)
+    // 광물 다각형 (보석 모양) — 외곽선 + 채움
     final path = Path();
     const sides = 6;
-    const r = 7.0;
+    const r = 8.0;
     for (int i = 0; i < sides; i++) {
       final a = (i / sides) * math.pi * 2;
       final x = math.cos(a) * r;
@@ -84,12 +115,21 @@ class ProjectileComponent extends PositionComponent {
     }
     path.close();
     canvas.drawPath(path, Paint()..color = ore.color);
-
-    // 하이라이트
-    canvas.drawCircle(
-      const Offset(-2, -2),
-      2,
-      Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.8),
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
     );
+
+    // 하이라이트 (좌상단 점)
+    canvas.drawCircle(
+      const Offset(-2.5, -2.5),
+      2.2,
+      Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.95),
+    );
+
+    canvas.restore();
   }
 }

@@ -96,12 +96,19 @@ class EnemyComponent extends PositionComponent
     final auraColor = def.kind == EnemyKind.boss
         ? const Color(0xFFFF6B5C)
         : def.auraColor;
+    final auraR = def.kind == EnemyKind.boss ? 38.0 : 24.0;
+    // 다중 원으로 글로우 시뮬레이션 (web 호환)
+    for (int i = 3; i >= 1; i--) {
+      canvas.drawCircle(
+        Offset(w / 2, h / 2 + yOff),
+        auraR + i * 4,
+        Paint()..color = auraColor.withValues(alpha: 0.12),
+      );
+    }
     canvas.drawCircle(
       Offset(w / 2, h / 2 + yOff),
-      def.kind == EnemyKind.boss ? 38 : 24,
-      Paint()
-        ..color = auraColor.withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+      auraR,
+      Paint()..color = auraColor.withValues(alpha: 0.55),
     );
 
     // 머리 위 마커 — 손님은 ⭐, 침입자는 💀
