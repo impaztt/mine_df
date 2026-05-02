@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/big_number.dart';
+import '../../data/balance/ore_data.dart';
 import '../../data/balance/pickaxe_data.dart';
 import '../../data/balance/producer_data.dart';
 import '../../data/balance/tap_upgrade_data.dart';
@@ -21,6 +22,7 @@ class UpgradeScreen extends ConsumerWidget {
       child: Column(
         children: [
           _Header(),
+          const _MineRankCard(),
           const BulkModeBar(),
           Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -139,6 +141,234 @@ class _Header extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 광맥 등급 강화 카드 — 강화 화면 어디서든 보이는 핵심 진행 카드.
+///
+/// 단발 강화 (한 번에 한 등급), 비용 = `mineUpgradeCost(rank)`.
+/// 강화 시 다음 광석으로 캐는 광석이 즉시 변경된다.
+class _MineRankCard extends ConsumerWidget {
+  const _MineRankCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final game = ref.watch(gameProvider);
+    final state = game.state;
+    final ore = oreByRank(state.mineRank);
+    final atMax = state.mineRank >= maxMineRank;
+    final nextOre = atMax ? null : oreByRank(state.mineRank + 1);
+    final cost = atMax ? null : mineUpgradeCost(state.mineRank);
+    final canBuy = !atMax && cost != null && state.coin >= cost;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            ore.color.withValues(alpha: 0.18),
+            (nextOre?.color ?? ore.color).withValues(alpha: 0.10),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: (atMax ? ore.color : ore.color)
+              .withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // 좌: 현재 광석 이모지 (큼직)
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ore.color.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(ore.emoji, style: const TextStyle(fontSize: 32)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      '광맥 등급',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ore.color.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${state.mineRank}/$maxMineRank',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: ore.color,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  atMax
+                      ? '${ore.name} (최고 등급)'
+                      : '${ore.name} → ${nextOre!.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.monetization_on_outlined,
+                          size: 11, color: AppColors.gold),
+                      const SizedBox(width: 3),
+                      Text(
+                        atMax
+                            ? '1개당 ${BigNumberFormat.format(ore.coinValue)}'
+                            : '1개당 ${BigNumberFormat.format(ore.coinValue)} → ${BigNumberFormat.format(nextOre!.coinValue)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.gold,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 우: 강화 버튼
+          _MineRankButton(
+            cost: cost,
+            atMax: atMax,
+            canBuy: canBuy,
+            onTap: () => _snack(context, game.upgradeMineRank()),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MineRankButton extends StatelessWidget {
+  const _MineRankButton({
+    required this.cost,
+    required this.atMax,
+    required this.canBuy,
+    required this.onTap,
+  });
+
+  final double? cost;
+  final bool atMax;
+  final bool canBuy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final Color fg;
+    if (atMax) {
+      bg = AppColors.dividerColor;
+      fg = AppColors.textSecondary;
+    } else if (canBuy) {
+      bg = AppColors.gold;
+      fg = Colors.black;
+    } else {
+      bg = AppColors.dividerColor;
+      fg = AppColors.textSecondary;
+    }
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: (!atMax && canBuy) ? onTap : null,
+        child: Container(
+          width: 92,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                atMax ? '최고' : '광맥 강화',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              if (!atMax && cost != null)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.monetization_on_outlined,
+                      color: canBuy ? fg : AppColors.gold,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        BigNumberFormat.format(cost!),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: canBuy ? fg : AppColors.gold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const Text(
+                  '-',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
