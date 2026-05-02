@@ -30,18 +30,20 @@ class SpiritBonus {
   SpiritBonus({required this.id, required this.coinBonus});
 }
 
-/// 채굴 1회 결과 — UI에서 짧은 피드백(콤보, 크리티컬 표시)에 사용
+/// 채굴 1회 결과 — UI에서 짧은 피드백 (코인 획득량, 크리티컬 표시)에 사용
 class MineHit {
   final int oreAmount;
   final bool isCritical;
-  final int comboCount;
   final double coinGained;
+
+  /// 매 채굴마다 새 인스턴스를 만들기 위한 식별자
+  final int seq;
 
   MineHit({
     required this.oreAmount,
     required this.isCritical,
-    required this.comboCount,
     required this.coinGained,
+    required this.seq,
   });
 }
 
@@ -65,18 +67,16 @@ class GameProvider extends ChangeNotifier {
   /// 자동 채굴 타이머
   Timer? _autoMineTimer;
 
-  /// 가장 최근 채굴 시각 (콤보 윈도우 계산용)
+  /// 가장 최근 채굴 시각 (자동매 간격 계산용)
   DateTime? _lastSwingAt;
 
   /// 탭 가속 쿨다운 종료 시각
   DateTime _tapCooldownUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// 현재 콤보 카운트
-  int _combo = 0;
-  int get combo => _combo;
-
   /// 가장 최근 채굴 정보 (UI 피드백)
   MineHit? lastHit;
+
+  int _hitSeq = 0;
 
   /// 호랑이 범 — 마지막 강타 시각
   DateTime _lastTigerStrikeAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -134,23 +134,11 @@ class GameProvider extends ChangeNotifier {
         now.difference(lastAt).inMilliseconds >= interval * 1000) {
       _performMine(now: now, isTap: false);
     } else {
-      // 1초마다 정도 UI에 갱신 알림 (콤보 만료, 등)
+      // 1초마다 정도 UI에 갱신 알림
       _tickCounter++;
       if (_tickCounter >= 5) {
         _tickCounter = 0;
-        _maybeExpireCombo(now);
         notifyListeners();
-      }
-    }
-  }
-
-  void _maybeExpireCombo(DateTime now) {
-    final lastAt = _lastSwingAt;
-    if (lastAt == null) return;
-    if (now.difference(lastAt).inMilliseconds >
-        (GameConstants.comboWindow * 1000).round()) {
-      if (_combo > 0) {
-        _combo = 0;
       }
     }
   }
@@ -170,23 +158,12 @@ class GameProvider extends ChangeNotifier {
   }
 
   void _performMine({required DateTime now, required bool isTap}) {
-    final lastAt = _lastSwingAt;
-    final withinCombo = lastAt != null &&
-        now.difference(lastAt).inMilliseconds <=
-            (GameConstants.comboWindow * 1000).round();
-    _combo = withinCombo ? (_combo + 1).clamp(0, 999) : 1;
     _lastSwingAt = now;
 
     // 채굴 광석 수
     int amount = PickaxeBalance.orePerSwing(_state.pickaxe);
     final dmgBonus = _damageBonus();
     amount = (amount * (1 + dmgBonus)).round().clamp(1, 1 << 30);
-
-    // 콤보 보너스 (탭일 때만 — 자동은 아주 약간만)
-    final comboMul = _comboMultiplier();
-    if (isTap) {
-      amount = (amount * comboMul).round();
-    }
 
     // 크리티컬
     final critChance = _critChance();
@@ -242,8 +219,8 @@ class GameProvider extends ChangeNotifier {
     lastHit = MineHit(
       oreAmount: amount,
       isCritical: isCritical,
-      comboCount: _combo,
-      coinGained: _state.autoSell ? coinGain : 0,
+      coinGained: _state.autoSell ? coinGain : amount * ore.coinValue,
+      seq: ++_hitSeq,
     );
 
     notifyListeners();
@@ -288,12 +265,6 @@ class GameProvider extends ChangeNotifier {
     final dali = _state.helpers['rabbit_dali'];
     if (dali == null || !dali.recruited) return 0;
     return 0.06 * dali.level;
-  }
-
-  double _comboMultiplier() {
-    final mults = GameConstants.comboMultipliers;
-    final idx = _combo.clamp(0, mults.length - 1);
-    return mults[idx];
   }
 
   final math.Random _rng = math.Random();
@@ -453,7 +424,6 @@ class GameProvider extends ChangeNotifier {
   Future<void> hardReset() async {
     await _repo.clear();
     _state = GameState.initial();
-    _combo = 0;
     _lastSwingAt = null;
     notifyListeners();
   }

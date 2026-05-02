@@ -11,14 +11,6 @@ class GameConstants {
   /// 화면 탭으로 곡괭이질을 추가 가속할 때의 쿨다운 (초)
   static const double tapCooldown = 0.30;
 
-  /// 콤보 — 연속 탭이 끊겼다고 보는 시간 (초)
-  static const double comboWindow = 1.5;
-
-  /// 콤보 카운트별 데미지 배수
-  static const List<double> comboMultipliers = [
-    1.0, 1.0, 1.2, 1.5, 1.8, 2.2,
-  ];
-
   /// 기본 크리티컬 확률 (%)
   static const double baseCritChance = 5.0;
 

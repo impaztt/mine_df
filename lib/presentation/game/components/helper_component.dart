@@ -2,9 +2,10 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
-import 'package:flutter/material.dart' show Colors, FontWeight, TextStyle;
+import 'package:flutter/material.dart' show Colors, FontWeight;
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../data/models/helper.dart';
 
 /// 광산 옆에서 함께 곡괭이질하는 조수 (이모지 기반 SD)
@@ -19,7 +20,7 @@ class HelperComponent extends PositionComponent {
   double _t = 0;
 
   late final TextPaint _emojiPainter = TextPaint(
-    style: const TextStyle(
+    style: AppTheme.koreanStyle(
       fontSize: 26,
       color: Colors.white,
       fontWeight: FontWeight.bold,
@@ -27,7 +28,7 @@ class HelperComponent extends PositionComponent {
   );
 
   late final TextPaint _levelPainter = TextPaint(
-    style: const TextStyle(
+    style: AppTheme.koreanStyle(
       fontSize: 9,
       color: AppColors.starlightCream,
       fontWeight: FontWeight.bold,

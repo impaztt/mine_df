@@ -106,24 +106,15 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     builder: (_, ref, _) {
                       final game = ref.watch(gameProvider);
                       _maybeSyncGame(game);
-                      return Stack(
-                        children: [
-                          if (game.activeSpirit != null)
-                            Positioned(
-                              top: 16,
-                              right: 16,
-                              child: _SpiritBadge(
-                                onTap: () => game.claimSpirit(),
-                              ),
-                            ),
-                          // 콤보 카운터
-                          if (game.combo >= 2)
-                            Positioned(
-                              top: 16,
-                              left: 16,
-                              child: _ComboBadge(combo: game.combo),
-                            ),
-                        ],
+                      if (game.activeSpirit == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return Positioned(
+                        top: 16,
+                        right: 16,
+                        child: _SpiritBadge(
+                          onTap: () => game.claimSpirit(),
+                        ),
                       );
                     },
                   ),
@@ -537,35 +528,3 @@ class _SpiritBadge extends StatelessWidget {
   }
 }
 
-class _ComboBadge extends StatelessWidget {
-  const _ComboBadge({required this.combo});
-  final int combo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.rubyPink, width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.flash_on, color: AppColors.rubyPink, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            '×$combo',
-            style: const TextStyle(
-              color: AppColors.rubyPink,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    )
-        .animate(key: ValueKey(combo))
-        .scaleXY(begin: 1.4, end: 1.0, duration: 200.ms);
-  }
-}

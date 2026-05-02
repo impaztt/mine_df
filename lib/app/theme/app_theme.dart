@@ -1,8 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
+
+  /// 한글 텍스트 스타일 헬퍼 — Flame TextPaint 등에서 사용.
+  static TextStyle koreanStyle({
+    double fontSize = 14,
+    Color color = AppColors.textPrimary,
+    FontWeight fontWeight = FontWeight.w600,
+  }) {
+    return GoogleFonts.notoSansKr(
+      fontSize: fontSize,
+      color: color,
+      fontWeight: fontWeight,
+    );
+  }
 
   static ThemeData get dark {
     final base = ThemeData.dark(useMaterial3: true);
@@ -13,23 +28,10 @@ class AppTheme {
         secondary: AppColors.gold,
         surface: AppColors.cardBackground,
       ),
-      textTheme: base.textTheme
-          .apply(
-            bodyColor: AppColors.textPrimary,
-            displayColor: AppColors.textPrimary,
-          )
-          .copyWith(
-            displayLarge: const TextStyle(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-            ),
-            titleLarge: const TextStyle(
-              fontWeight: FontWeight.w700,
-            ),
-            labelLarge: const TextStyle(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+      textTheme: GoogleFonts.notoSansKrTextTheme(base.textTheme).apply(
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
+      ),
       cardTheme: const CardThemeData(
         color: AppColors.cardBackground,
         elevation: 0,
@@ -44,6 +46,16 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: 0,
+          textStyle: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        contentTextStyle: GoogleFonts.notoSansKr(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

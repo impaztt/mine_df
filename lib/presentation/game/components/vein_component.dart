@@ -3,8 +3,9 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
-import 'package:flutter/material.dart' show Colors, FontWeight, TextStyle;
+import 'package:flutter/material.dart' show Colors, FontWeight;
 
+import '../../../app/theme/app_theme.dart';
 import '../../../data/models/ore_type.dart';
 
 /// 광맥 — 화면 가운데 위치한 큰 광석 덩어리.
@@ -37,7 +38,7 @@ class VeinComponent extends PositionComponent {
 
   void _refreshPainter() {
     _emojiPainter = TextPaint(
-      style: const TextStyle(
+      style: AppTheme.koreanStyle(
         fontSize: 78,
         color: Colors.white,
         fontWeight: FontWeight.bold,

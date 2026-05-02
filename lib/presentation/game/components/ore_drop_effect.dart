@@ -2,8 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
-import 'package:flutter/material.dart'
-    show Colors, FontWeight, TextStyle;
+import 'package:flutter/material.dart' show Colors, FontWeight;
+
+import '../../../app/theme/app_theme.dart';
 
 /// 광맥에서 튀어나오는 작은 광석 파편.
 ///
@@ -117,7 +118,7 @@ class FloatingText extends PositionComponent {
   @override
   void render(Canvas canvas) {
     final painter = TextPaint(
-      style: TextStyle(
+      style: AppTheme.koreanStyle(
         fontSize: fontSize,
         color: color.withValues(alpha: _alpha),
         fontWeight: FontWeight.w900,

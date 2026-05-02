@@ -4,6 +4,8 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart' show Color;
 
+import '../../app/theme/app_colors.dart';
+import '../../core/utils/big_number.dart';
 import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
 import '../../data/models/game_state.dart';
@@ -117,10 +119,13 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
     vein.onHit(isCritical: hit.isCritical);
     _spawnChips(hit.isCritical ? 6 : 3);
 
-    if (hit.isCritical) {
-      _spawnFloating('💥 크리티컬!', const Color(0xFFFFD86E), 22);
-    } else if (hit.comboCount >= 3) {
-      _spawnFloating('콤보 ×${hit.comboCount}', const Color(0xFFFFF4D6), 16);
+    // 채굴 결과를 화면에 떠오르는 텍스트로 표시 (코인 획득량)
+    if (hit.coinGained > 0) {
+      final label = '+${BigNumberFormat.format(hit.coinGained)}';
+      final color =
+          hit.isCritical ? const Color(0xFFFFD86E) : AppColors.gold;
+      final fontSize = hit.isCritical ? 22.0 : 16.0;
+      _spawnFloating(label, color, fontSize);
     }
   }
 
@@ -141,7 +146,9 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
   }
 
   void _spawnFloating(String text, Color color, double size) {
-    final origin = vein.absolutePosition + Vector2(0, -40);
+    // 광맥 살짝 위 + 좌우로 미세 분산 (연속 채굴 시 가독성)
+    final dx = (_rng.nextDouble() * 2 - 1) * 30;
+    final origin = vein.absolutePosition + Vector2(dx, -50);
     add(FloatingText(
       origin: origin,
       text: text,
