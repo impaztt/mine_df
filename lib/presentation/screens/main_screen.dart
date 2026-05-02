@@ -12,6 +12,7 @@ import '../widgets/offline_reward_dialog.dart';
 import '../widgets/resource_chip.dart';
 import 'codex_sheet.dart';
 import 'helper_sheet.dart';
+import 'ore_inventory_sheet.dart';
 import 'pickaxe_sheet.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -224,13 +225,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
                   '코인',
                   BigNumberFormat.format(state.coin),
                   AppColors.gold,
-                  subtitle:
-                      '+${BigNumberFormat.format(coinPerSec)}/s',
+                  subtitle: state.autoSell
+                      ? '+${BigNumberFormat.format(coinPerSec)}/s'
+                      : null,
                 ),
                 const SizedBox(width: 10),
-                _autoSellToggle(game, state.autoSell),
+                _autoSellToggle(game, state),
               ],
             ),
+            const SizedBox(height: 6),
+            // 광석 인벤토리 카드 (탭 → 시트, 모두팔기 버튼)
+            _inventoryCard(game),
             const SizedBox(height: 8),
             // 현재 광석 라벨
             Container(
@@ -376,40 +381,254 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _autoSellToggle(GameProvider game, bool autoSell) {
+  Widget _autoSellToggle(GameProvider game, dynamic state) {
+    final unlocked = state.autoSellUnlocked as bool;
+    final autoSell = state.autoSell as bool;
+
+    final IconData icon;
+    final Color color;
+    final String label;
+    if (!unlocked) {
+      icon = Icons.lock;
+      color = AppColors.tierEpic;
+      label = '잠금해제';
+    } else if (autoSell) {
+      icon = Icons.toggle_on;
+      color = AppColors.gold;
+      label = '자동환전';
+    } else {
+      icon = Icons.toggle_off;
+      color = AppColors.textSecondary;
+      label = '수집모드';
+    }
+
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: () => game.toggleAutoSell(),
+      onTap: () {
+        if (!unlocked) {
+          _showAutoSellUnlockDialog(game);
+        } else {
+          final r = game.toggleAutoSell();
+          if (!r.ok && r.message != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(r.message!),
+                duration: const Duration(seconds: 1),
+              ),
+            );
+          }
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: autoSell
               ? AppColors.gold.withValues(alpha: 0.18)
-              : AppColors.cardBackgroundLight,
+              : (unlocked
+                  ? AppColors.cardBackgroundLight
+                  : AppColors.tierEpic.withValues(alpha: 0.10)),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: autoSell ? AppColors.gold : AppColors.dividerColor,
-          ),
+          border: Border.all(color: color),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              autoSell ? Icons.toggle_on : Icons.toggle_off,
-              color: autoSell ? AppColors.gold : AppColors.textSecondary,
-              size: 18,
-            ),
+            Icon(icon, color: color, size: 18),
             const SizedBox(height: 1),
             Text(
-              autoSell ? '자동환전' : '수집모드',
+              label,
               style: TextStyle(
                 fontSize: 9,
-                color: autoSell
-                    ? AppColors.gold
-                    : AppColors.textSecondary,
+                color: color,
                 fontWeight: FontWeight.w800,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAutoSellUnlockDialog(GameProvider game) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Row(
+          children: [
+            Icon(Icons.lock_open, color: AppColors.tierEpic),
+            SizedBox(width: 8),
+            Text('자동환전 잠금 해제'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '자동환전을 켜면 광석을 캐자마자 코인으로 바뀝니다. '
+              '한 번 잠금을 해제하면 영구적으로 사용할 수 있어요.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackgroundLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.diamond_outlined,
+                      color: AppColors.crystalTeal),
+                  const SizedBox(width: 8),
+                  const Text(
+                    '비용',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '보석 ${GameProvider.autoSellUnlockGemCost}개',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.crystalTeal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '현재 보유: 보석 ${game.state.gem}개',
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final r = game.unlockAutoSell();
+              Navigator.of(context).pop();
+              if (!r.ok && r.message != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(r.message!),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.tierEpic,
+            ),
+            child: const Text('잠금 해제'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inventoryCard(GameProvider game) {
+    final kinds = game.inventoryKindCount();
+    final value = game.inventoryTotalValue();
+    final empty = kinds == 0;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _open(const OreInventorySheet()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackgroundLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: empty
+                ? AppColors.dividerColor
+                : AppColors.crystalTeal.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.inventory_2_outlined,
+              color: AppColors.crystalTeal,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '광석 인벤토리',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        empty ? '비어있음' : '$kinds종',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: empty
+                              ? AppColors.textSecondary
+                              : AppColors.crystalTeal,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    empty
+                        ? '곡괭이질로 광석을 모아보세요'
+                        : '${BigNumberFormat.format(value)} 코인 가치',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: empty
+                          ? AppColors.textSecondary
+                          : AppColors.starlightCream,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!empty)
+              ElevatedButton(
+                onPressed: () => game.sellAllInventory(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.gold,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  minimumSize: const Size(0, 0),
+                ),
+                child: const Text(
+                  '모두팔기',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              )
+            else
+              const Icon(Icons.chevron_right,
+                  color: AppColors.textSecondary, size: 20),
           ],
         ),
       ),

@@ -32,6 +32,9 @@ class GameState {
   /// 자동 환전 (true = 캐자마자 코인으로 변환)
   final bool autoSell;
 
+  /// 자동 환전 잠금 해제 여부 (보석으로 구매하면 true). false면 수동만 가능.
+  final bool autoSellUnlocked;
+
   /// 광부 누적 채굴 회수 (도감/업적용)
   final int totalSwings;
 
@@ -51,6 +54,7 @@ class GameState {
     required this.helpers,
     required this.layer,
     required this.autoSell,
+    required this.autoSellUnlocked,
     required this.totalSwings,
     required this.discoveredOres,
     required this.lastSavedAt,
@@ -66,7 +70,8 @@ class GameState {
       pickaxe: const PickaxeStats(),
       helpers: const {},
       layer: 1,
-      autoSell: true,
+      autoSell: false,
+      autoSellUnlocked: false,
       totalSwings: 0,
       discoveredOres: const {'rough_stone'},
       lastSavedAt: 0,
@@ -83,6 +88,7 @@ class GameState {
     Map<String, HelperState>? helpers,
     int? layer,
     bool? autoSell,
+    bool? autoSellUnlocked,
     int? totalSwings,
     Set<String>? discoveredOres,
     int? lastSavedAt,
@@ -97,6 +103,7 @@ class GameState {
       helpers: helpers ?? this.helpers,
       layer: layer ?? this.layer,
       autoSell: autoSell ?? this.autoSell,
+      autoSellUnlocked: autoSellUnlocked ?? this.autoSellUnlocked,
       totalSwings: totalSwings ?? this.totalSwings,
       discoveredOres: discoveredOres ?? this.discoveredOres,
       lastSavedAt: lastSavedAt ?? this.lastSavedAt,
@@ -113,6 +120,7 @@ class GameState {
         'helpers': helpers.map((k, v) => MapEntry(k, v.toJson())),
         'layer': layer,
         'autoSell': autoSell,
+        'autoSellUnlocked': autoSellUnlocked,
         'totalSwings': totalSwings,
         'discoveredOres': discoveredOres.toList(),
         'lastSavedAt': lastSavedAt,
@@ -134,7 +142,10 @@ class GameState {
               k, HelperState.fromJson(v as Map<String, dynamic>)),
         ),
         layer: j['layer'] as int? ?? 1,
-        autoSell: j['autoSell'] as bool? ?? true,
+        autoSell: j['autoSell'] as bool? ?? false,
+        // 기존 사용자가 자동환전을 켜본 적 있다면 잠금 해제된 상태로 마이그레이션
+        autoSellUnlocked: j['autoSellUnlocked'] as bool? ??
+            (j['autoSell'] as bool? ?? false),
         totalSwings: j['totalSwings'] as int? ?? 0,
         discoveredOres: ((j['discoveredOres'] as List?)
                     ?.cast<String>()

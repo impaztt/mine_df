@@ -119,14 +119,21 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
     vein.onHit(isCritical: hit.isCritical);
     _spawnChips(hit.isCritical ? 6 : 3);
 
-    // 채굴 결과를 화면에 떠오르는 텍스트로 표시 (코인 획득량)
-    if (hit.coinGained > 0) {
-      final label = '+${BigNumberFormat.format(hit.coinGained)}';
-      final color =
-          hit.isCritical ? const Color(0xFFFFD86E) : AppColors.gold;
-      final fontSize = hit.isCritical ? 22.0 : 16.0;
-      _spawnFloating(label, color, fontSize);
+    // 채굴 결과 텍스트 — 자동환전 ON이면 코인, OFF면 광석 개수
+    final state = providerRef().state;
+    final String label;
+    final Color color;
+    final double fontSize = hit.isCritical ? 22.0 : 16.0;
+    if (state.autoSell) {
+      label = '+${BigNumberFormat.format(hit.coinGained)}';
+      color = hit.isCritical ? const Color(0xFFFFD86E) : AppColors.gold;
+    } else {
+      label = '+${BigNumberFormat.format(hit.oreAmount.toDouble())}개';
+      color = hit.isCritical
+          ? const Color(0xFFFFD86E)
+          : AppColors.crystalTeal;
     }
+    _spawnFloating(label, color, fontSize);
   }
 
   void _spawnChips(int count) {

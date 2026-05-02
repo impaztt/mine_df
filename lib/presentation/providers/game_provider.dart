@@ -271,9 +271,33 @@ class GameProvider extends ChangeNotifier {
 
   // === 환전 / 자동매도 토글 ===
 
-  void toggleAutoSell() {
+  /// 자동환전 잠금 해제 비용 (보석)
+  static const int autoSellUnlockGemCost = 100;
+
+  ActionResult unlockAutoSell() {
+    if (_state.autoSellUnlocked) {
+      return ActionResult.fail('이미 잠금 해제됨');
+    }
+    if (_state.gem < autoSellUnlockGemCost) {
+      return ActionResult.fail(
+          '보석이 부족합니다 ($autoSellUnlockGemCost개 필요)');
+    }
+    _state = _state.copyWith(
+      gem: _state.gem - autoSellUnlockGemCost,
+      autoSellUnlocked: true,
+      autoSell: true,
+    );
+    notifyListeners();
+    return ActionResult.success;
+  }
+
+  ActionResult toggleAutoSell() {
+    if (!_state.autoSellUnlocked) {
+      return ActionResult.fail('자동환전이 잠겨 있습니다');
+    }
     _state = _state.copyWith(autoSell: !_state.autoSell);
     notifyListeners();
+    return ActionResult.success;
   }
 
   /// 인벤토리에 모인 광석을 일괄 환전
@@ -294,6 +318,44 @@ class GameProvider extends ChangeNotifier {
     );
     notifyListeners();
   }
+
+  /// 특정 광석만 환전
+  void sellOre(String oreId) {
+    final count = _state.oreInventory[oreId];
+    if (count == null || count <= 0) return;
+    final def = kOres.firstWhere(
+      (o) => o.id == oreId,
+      orElse: () => kOres.first,
+    );
+    final sellBonus = _sellBonus();
+    final gained = count * def.coinValue * (1 + sellBonus);
+    final inv = Map<String, double>.from(_state.oreInventory);
+    inv.remove(oreId);
+    _state = _state.copyWith(
+      coin: _state.coin + gained,
+      oreInventory: inv,
+    );
+    notifyListeners();
+  }
+
+  /// 인벤토리 합계 가치 (현재 환전 시 받을 코인)
+  double inventoryTotalValue() {
+    final sellBonus = _sellBonus();
+    double total = 0;
+    for (final entry in _state.oreInventory.entries) {
+      final def = kOres.firstWhere(
+        (o) => o.id == entry.key,
+        orElse: () => kOres.first,
+      );
+      total += entry.value * def.coinValue * (1 + sellBonus);
+    }
+    return total;
+  }
+
+  /// 인벤토리에 있는 광석 종류 수
+  int inventoryKindCount() => _state.oreInventory.entries
+      .where((e) => e.value > 0)
+      .length;
 
   // === 업그레이드 ===
 
