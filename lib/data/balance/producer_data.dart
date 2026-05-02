@@ -126,14 +126,15 @@ const List<ProducerDef> kProducers = [
 class ProducerBalance {
   ProducerBalance._();
 
-  /// 매 레벨 비용 ×1.13 (검클리커 동일)
-  static const double costGrowth = 1.13;
+  /// 매 레벨 비용 ×1.17 (이전 ×1.13 — 더 가파르게)
+  static const double costGrowth = 1.17;
 
-  /// 매 레벨 광석/초 ×1.07
-  static const double opsGrowth = 1.07;
+  /// 매 레벨 광석/초 ×1.065 (이전 ×1.07 — 살짝 둔화)
+  static const double opsGrowth = 1.065;
 
-  /// 마일스톤 보너스 — 도달 시 광석/초 ×2
-  static const List<int> milestoneLevels = [25, 50, 100, 250, 500];
+  /// 마일스톤 보너스 — 도달 시 광석/초 ×2.
+  /// 마일스톤 위치를 미루어 후반 자동 채굴 인플레이션을 늦춤.
+  static const List<int> milestoneLevels = [50, 150, 300, 600, 1200];
 
   /// Lv0 광부의 광석/초 = 0 (영입 안 됨)
   /// Lv1 = baseOrePerSec × milestoneMultiplier

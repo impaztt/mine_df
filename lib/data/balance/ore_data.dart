@@ -297,15 +297,28 @@ OreDef oreByRank(int rank) {
   return kOres[idx];
 }
 
-/// 광맥 등급 업그레이드 비용 — 다음 등급 광석을 약 250개 모은 가치.
+/// 광맥 등급 업그레이드 비용.
 ///
-/// 다음 광석 1개 가치는 보통 현재 광석의 4.5배쯤이라, 이 비용은
-/// "다음 광석을 250개 캐서 팔아야 가능"한 수준. 여기에 곡괭이 데미지
-/// 강화도 함께 필요하므로 광맥 강화는 큰 도약 이벤트로 작용한다.
+/// 30등급에 약 4주 도달 목표로, 등급이 올라갈수록 multiplier 자체가
+/// 곱해지는 곡선:
+///   비용 = 다음 광석 가치 × (1500 × 1.10^(currentRank - 1))
+///
+/// - 1등급(거친 돌→구리): 1500 × 1.0    = ×1.5K  (튜토리얼)
+/// - 5등급(금→수정):       1500 × 1.46  = ×2.2K
+/// - 15등급:               1500 × 3.80  = ×5.7K
+/// - 30등급(우주→별핵):    1500 × 16.05 = ×24K
+///
+/// 광석 가치 자체도 등급당 ×5씩 자라기 때문에 후반 등급으로 갈수록
+/// 한 등급 강화에 필요한 시간이 거의 두 배씩 늘어나는 구조.
 double mineUpgradeCost(int currentRank) {
   if (currentRank >= kOres.length) return double.infinity;
   final nextValue = oreByRank(currentRank + 1).coinValue;
-  return nextValue * 250;
+  // 1.10^(currentRank-1) — 매 등급마다 +10% 가파라짐
+  double multiplier = 1500;
+  for (int i = 1; i < currentRank; i++) {
+    multiplier *= 1.10;
+  }
+  return nextValue * multiplier;
 }
 
 /// 최대 광맥 등급

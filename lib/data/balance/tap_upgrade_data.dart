@@ -108,8 +108,8 @@ const List<TapUpgradeDef> kTapUpgrades = [
 class TapUpgradeBalance {
   TapUpgradeBalance._();
 
-  /// 비용 곡선 — 매 레벨 ×1.10
-  static const double costGrowth = 1.10;
+  /// 비용 곡선 — 매 레벨 ×1.16 (이전 ×1.10 — 가파르게)
+  static const double costGrowth = 1.16;
 
   static double upgradeCost(TapUpgradeDef def, int currentLevel) {
     return def.baseCost * _pow(costGrowth, currentLevel);
