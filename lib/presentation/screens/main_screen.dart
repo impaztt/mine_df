@@ -12,9 +12,13 @@ import '../providers/game_provider.dart';
 import '../widgets/offline_reward_dialog.dart';
 import '../widgets/resource_chip.dart';
 import 'codex_sheet.dart';
+import 'essence_sheet.dart';
 import 'helper_sheet.dart';
 import 'inventory_sheet.dart';
 import 'pickaxe_sheet.dart';
+import 'prestige_sheet.dart';
+import 'producer_sheet.dart';
+import 'tap_upgrade_sheet.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -271,6 +275,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
               ),
             ),
             const SizedBox(height: 10),
+            // 1행: 곡괭이 / 광부 / 탭강화
             Row(
               children: [
                 Expanded(
@@ -283,9 +288,47 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 const SizedBox(width: 6),
                 Expanded(
                   child: _bottomBtn(
+                    icon: Icons.engineering,
+                    label: '광부',
+                    onTap: () => _open(const ProducerSheet()),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _bottomBtn(
+                    icon: Icons.touch_app,
+                    label: '탭강화',
+                    onTap: () => _open(const TapUpgradeSheet()),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 2행: 조수 / 정수 / 환생 / 도감
+            Row(
+              children: [
+                Expanded(
+                  child: _bottomBtn(
                     icon: Icons.pets,
                     label: '조수',
                     onTap: () => _open(const HelperSheet()),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _bottomBtn(
+                    icon: Icons.diamond_outlined,
+                    label: '정수',
+                    onTap: () => _open(const EssenceSheet()),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _bottomBtn(
+                    icon: Icons.auto_awesome,
+                    label: '환생',
+                    onTap: () => _open(const PrestigeSheet()),
+                    highlight: game.canRebirthNow,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -600,26 +643,40 @@ class _MainScreenState extends ConsumerState<MainScreen>
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool highlight = false,
   }) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.cardBackgroundLight,
+          color: highlight
+              ? AppColors.gold.withValues(alpha: 0.18)
+              : AppColors.cardBackgroundLight,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.dividerColor),
+          border: Border.all(
+            color:
+                highlight ? AppColors.gold : AppColors.dividerColor,
+            width: highlight ? 2 : 1,
+          ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.gold, size: 22),
+            Icon(
+              icon,
+              color: highlight
+                  ? AppColors.gold
+                  : AppColors.gold.withValues(alpha: 0.85),
+              size: 22,
+            ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
+                color: highlight ? AppColors.gold : null,
               ),
             ),
           ],

@@ -110,32 +110,37 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
     _layoutHelpers();
   }
 
-  /// 외부에서 채굴 액션이 일어났음을 알림 (Provider → Game 동기화)
+  /// 외부에서 채굴 액션이 일어났음을 알림 (Provider → Game 동기화).
+  /// 자동 채굴은 매 200ms 발생하므로 시각 효과를 띄우지 않고
+  /// 탭이거나 크리티컬일 때만 효과를 발생시킨다.
   void notifyMineHit(MineHit hit) {
     if (identical(hit, _lastShownHit)) return;
     _lastShownHit = hit;
 
-    byeori.swing();
-    vein.onHit(isCritical: hit.isCritical);
-    _spawnChips(hit.isCritical ? 6 : 3);
+    final visual = hit.fromTap || hit.isCritical;
+    if (visual) {
+      byeori.swing();
+      vein.onHit(isCritical: hit.isCritical);
+      _spawnChips(hit.isCritical ? 6 : 3);
 
-    // 채굴 결과 텍스트 — 자동환전 ON이면 코인, OFF면 광석 개수
-    final state = providerRef().state;
-    final String label;
-    final Color color;
-    final double fontSize = hit.isCritical ? 22.0 : 16.0;
-    if (state.autoSell) {
-      label = '+${BigNumberFormat.format(hit.coinGained)}';
-      color = hit.isCritical ? const Color(0xFFFFD86E) : AppColors.gold;
-    } else {
-      label = '+${BigNumberFormat.format(hit.oreAmount.toDouble())}개';
-      color = hit.isCritical
-          ? const Color(0xFFFFD86E)
-          : AppColors.crystalTeal;
+      final state = providerRef().state;
+      final String label;
+      final Color color;
+      final double fontSize = hit.isCritical ? 22.0 : 16.0;
+      if (state.autoSell) {
+        label = '+${BigNumberFormat.format(hit.coinGained)}';
+        color =
+            hit.isCritical ? const Color(0xFFFFD86E) : AppColors.gold;
+      } else {
+        label = '+${BigNumberFormat.format(hit.oreAmount)}개';
+        color = hit.isCritical
+            ? const Color(0xFFFFD86E)
+            : AppColors.crystalTeal;
+      }
+      _spawnFloating(label, color, fontSize);
     }
-    _spawnFloating(label, color, fontSize);
 
-    // 신규 광석 발견 시 보석 보상 알림
+    // 신규 광석 발견은 자동/탭 무관 항상 강조
     if (hit.newlyDiscoveredOreId != null) {
       _spawnFloating('✨ 새 광석! 💎+3', AppColors.crystalTeal, 18);
     }
