@@ -215,8 +215,9 @@ class _OreRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${BigNumberFormat.format(count)}개 · '
-                  '1개당 ${BigNumberFormat.format(ore.coinValue)} 코인',
+                  '${BigNumberFormat.format(count)}개 × '
+                  '${BigNumberFormat.format(ore.coinValue)} = '
+                  '${BigNumberFormat.format(count * ore.coinValue)} 코인',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,

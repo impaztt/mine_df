@@ -541,6 +541,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   Widget _inventoryCard(GameProvider game) {
     final kinds = game.inventoryKindCount();
+    final totalCount = game.inventoryTotalCount();
     final value = game.inventoryTotalValue();
     final empty = kinds == 0;
 
@@ -582,7 +583,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        empty ? '비어있음' : '$kinds종',
+                        empty
+                            ? '비어있음'
+                            : '$kinds종 · ${BigNumberFormat.format(totalCount)}개',
                         style: TextStyle(
                           fontSize: 11,
                           color: empty
@@ -596,7 +599,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                   Text(
                     empty
                         ? '곡괭이질로 광석을 모아보세요'
-                        : '${BigNumberFormat.format(value)} 코인 가치',
+                        : '팔면 ${BigNumberFormat.format(value)} 코인',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
