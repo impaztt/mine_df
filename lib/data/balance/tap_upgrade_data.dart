@@ -12,7 +12,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +1',
     icon: Icons.fitness_center,
     accent: Color(0xFF90CAF9),
-    baseCost: 800,
+    baseCost: 270,
     tapOrePerLevel: 1,
   ),
   TapUpgradeDef(
@@ -21,7 +21,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +5',
     icon: Icons.back_hand,
     accent: Color(0xFFCE93D8),
-    baseCost: 8000,
+    baseCost: 2700,
     tapOrePerLevel: 5,
   ),
   TapUpgradeDef(
@@ -30,7 +30,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +25',
     icon: Icons.auto_fix_high,
     accent: Color(0xFFFFD54F),
-    baseCost: 80000,
+    baseCost: 27000,
     tapOrePerLevel: 25,
   ),
   TapUpgradeDef(
@@ -39,7 +39,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +100',
     icon: Icons.menu_book,
     accent: Color(0xFFFFAB91),
-    baseCost: 800000,
+    baseCost: 270000,
     tapOrePerLevel: 100,
   ),
   TapUpgradeDef(
@@ -48,7 +48,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +500',
     icon: Icons.self_improvement,
     accent: Color(0xFFEF5350),
-    baseCost: 8000000,
+    baseCost: 2700000,
     tapOrePerLevel: 500,
   ),
   TapUpgradeDef(
@@ -57,7 +57,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +2.5K',
     icon: Icons.auto_awesome,
     accent: Color(0xFFB39DDB),
-    baseCost: 80000000,
+    baseCost: 27000000,
     tapOrePerLevel: 2500,
   ),
   TapUpgradeDef(
@@ -66,7 +66,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +12.5K',
     icon: Icons.visibility,
     accent: Color(0xFF9575CD),
-    baseCost: 800000000,
+    baseCost: 270000000,
     tapOrePerLevel: 12500,
   ),
   TapUpgradeDef(
@@ -75,7 +75,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +62.5K',
     icon: Icons.star_rate,
     accent: Color(0xFFFFCC80),
-    baseCost: 8000000000,
+    baseCost: 2700000000,
     tapOrePerLevel: 62500,
   ),
   TapUpgradeDef(
@@ -84,7 +84,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +312.5K',
     icon: Icons.timeline,
     accent: Color(0xFFFF8A65),
-    baseCost: 80000000000,
+    baseCost: 27000000000,
     tapOrePerLevel: 312500,
   ),
   TapUpgradeDef(
@@ -93,7 +93,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +1.56M',
     icon: Icons.bolt,
     accent: Color(0xFFFFB74D),
-    baseCost: 800000000000,
+    baseCost: 270000000000,
     tapOrePerLevel: 1562500,
   ),
   TapUpgradeDef(
@@ -102,7 +102,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +7.81M',
     icon: Icons.all_inclusive,
     accent: Color(0xFFEF9A9A),
-    baseCost: 8000000000000,
+    baseCost: 2700000000000,
     tapOrePerLevel: 7812500,
   ),
 ];

@@ -13,7 +13,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🧒',
     icon: Icons.child_care,
     accent: Color(0xFFFFB74D),
-    baseCost: 5000,
+    baseCost: 1700,
     baseOrePerSec: 1,
   ),
   ProducerDef(
@@ -22,7 +22,7 @@ const List<ProducerDef> kProducers = [
     emoji: '⛏️',
     icon: Icons.handyman,
     accent: Color(0xFFAED581),
-    baseCost: 50000,
+    baseCost: 17000,
     baseOrePerSec: 8,
   ),
   ProducerDef(
@@ -31,7 +31,7 @@ const List<ProducerDef> kProducers = [
     emoji: '👷',
     icon: Icons.engineering,
     accent: Color(0xFF64B5F6),
-    baseCost: 500000,
+    baseCost: 170000,
     baseOrePerSec: 60,
   ),
   ProducerDef(
@@ -40,7 +40,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🐹',
     icon: Icons.pets,
     accent: Color(0xFFBA68C8),
-    baseCost: 5000000,
+    baseCost: 1700000,
     baseOrePerSec: 400,
   ),
   ProducerDef(
@@ -49,7 +49,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🏔️',
     icon: Icons.terrain,
     accent: Color(0xFFFFD54F),
-    baseCost: 50000000,
+    baseCost: 17000000,
     baseOrePerSec: 3000,
   ),
   ProducerDef(
@@ -58,7 +58,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🔧',
     icon: Icons.build,
     accent: Color(0xFFE57373),
-    baseCost: 500000000,
+    baseCost: 170000000,
     baseOrePerSec: 22000,
   ),
   ProducerDef(
@@ -67,7 +67,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🤖',
     icon: Icons.precision_manufacturing,
     accent: Color(0xFFFFEB3B),
-    baseCost: 5000000000,
+    baseCost: 1700000000,
     baseOrePerSec: 150000,
   ),
   ProducerDef(
@@ -76,7 +76,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🧙',
     icon: Icons.auto_fix_high,
     accent: Color(0xFFFFA726),
-    baseCost: 50000000000,
+    baseCost: 17000000000,
     baseOrePerSec: 1000000,
   ),
   ProducerDef(
@@ -85,7 +85,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🐉',
     icon: Icons.flight,
     accent: Color(0xFF8D6E63),
-    baseCost: 500000000000,
+    baseCost: 170000000000,
     baseOrePerSec: 7000000,
   ),
   ProducerDef(
@@ -94,7 +94,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🌟',
     icon: Icons.auto_awesome,
     accent: Color(0xFF7E57C2),
-    baseCost: 5000000000000,
+    baseCost: 1700000000000,
     baseOrePerSec: 50000000,
   ),
   ProducerDef(
@@ -103,7 +103,7 @@ const List<ProducerDef> kProducers = [
     emoji: '⏳',
     icon: Icons.hourglass_bottom,
     accent: Color(0xFF26A69A),
-    baseCost: 50000000000000,
+    baseCost: 17000000000000,
     baseOrePerSec: 350000000,
   ),
   ProducerDef(
@@ -112,7 +112,7 @@ const List<ProducerDef> kProducers = [
     emoji: '🌌',
     icon: Icons.public,
     accent: Color(0xFF5C6BC0),
-    baseCost: 500000000000000,
+    baseCost: 170000000000000,
     baseOrePerSec: 2500000000,
   ),
   ProducerDef(
@@ -121,7 +121,7 @@ const List<ProducerDef> kProducers = [
     emoji: '👁️',
     icon: Icons.visibility,
     accent: Color(0xFF7986CB),
-    baseCost: 5000000000000000,
+    baseCost: 1700000000000000,
     baseOrePerSec: 8000000000,
   ),
 ];
