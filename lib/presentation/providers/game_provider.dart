@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/game_constants.dart';
+import '../../data/balance/country_data.dart';
 import '../../data/balance/essence_data.dart';
 import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
@@ -12,6 +13,7 @@ import '../../data/balance/pickaxe_data.dart';
 import '../../data/balance/prestige_data.dart';
 import '../../data/balance/producer_data.dart';
 import '../../data/balance/tap_upgrade_data.dart';
+import '../../data/models/country.dart';
 import '../../data/models/game_state.dart';
 import '../../data/models/helper.dart';
 import '../../data/models/pickaxe.dart';
@@ -103,6 +105,7 @@ class GameProvider extends ChangeNotifier {
   Timer? _spiritTimer;
 
   Timer? _autoTickTimer;
+  Timer? _marketTickTimer;
   DateTime? _lastSwingAt;
   MineHit? lastHit;
   int _hitSeq = 0;
@@ -130,7 +133,9 @@ class GameProvider extends ChangeNotifier {
       lastSavedAt: now.millisecondsSinceEpoch,
     );
     _initialized = true;
+    _ensureMarketsInitialized();
     _startAutoTick();
+    _startMarketTick();
     _scheduleSpirit();
     notifyListeners();
     await _repo.save(_state);
@@ -139,8 +144,196 @@ class GameProvider extends ChangeNotifier {
   @override
   void dispose() {
     _autoTickTimer?.cancel();
+    _marketTickTimer?.cancel();
     _spiritTimer?.cancel();
     super.dispose();
+  }
+
+  // === 시세 거래소 ===
+
+  /// 첫 진입 시 / 새 국가 추가 시 빠진 국가 상태를 초기화
+  void _ensureMarketsInitialized() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final map = Map<String, CountryState>.from(_state.markets);
+    bool changed = false;
+    for (final c in kCountries) {
+      if (!map.containsKey(c.id)) {
+        map[c.id] = CountryState(
+          id: c.id,
+          priceMultiplier: 1.0,
+          lastUpdatedAt: now,
+          cycleStartedAt: now,
+        );
+        changed = true;
+      }
+    }
+    if (changed) {
+      _state = _state.copyWith(markets: map);
+    }
+  }
+
+  /// 매 분 시세를 새로 계산
+  void _startMarketTick() {
+    _marketTickTimer?.cancel();
+    // 즉시 1회 계산 후 60초마다 갱신
+    _refreshMarketPrices();
+    _marketTickTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshMarketPrices(),
+    );
+  }
+
+  void _refreshMarketPrices() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final map = Map<String, CountryState>.from(_state.markets);
+    bool changed = false;
+    for (final c in kCountries) {
+      final cur = map[c.id];
+      if (cur == null) continue;
+      final mult = computePriceMultiplier(
+        def: c,
+        cycleStartedAt: cur.cycleStartedAt == 0 ? now : cur.cycleStartedAt,
+        nowMs: now,
+        seed: c.id.hashCode,
+      );
+      // 0.5% 이상 변동만 적용 (UI 깜빡임 방지)
+      if ((mult - cur.priceMultiplier).abs() > 0.005) {
+        map[c.id] = cur.copyWith(
+          priceMultiplier: mult,
+          lastUpdatedAt: now,
+          cycleStartedAt: cur.cycleStartedAt == 0 ? now : cur.cycleStartedAt,
+        );
+        changed = true;
+      }
+    }
+    if (changed) {
+      _state = _state.copyWith(markets: map);
+      notifyListeners();
+    }
+  }
+
+  /// 특정 국가에 모든 매수 가능 광석을 일괄 판매.
+  /// 시세 배율 + sellBonus 모두 반영.
+  ActionResult sellAllToCountry(String countryId) {
+    final c = countryById(countryId);
+    final market = _state.markets[countryId];
+    if (market == null) return ActionResult.fail('국가 정보 없음');
+
+    final invMap = Map<String, double>.from(_state.oreInventory);
+    final sellBonus = IdleCalculator.sellBonus(_state);
+    double totalCoin = 0;
+    int kinds = 0;
+
+    for (final entry in invMap.entries.toList()) {
+      // 광석 등급 확인
+      final ore = kOres.firstWhere(
+        (o) => o.id == entry.key,
+        orElse: () => kOres.first,
+      );
+      final rank = kOres.indexOf(ore) + 1;
+      if (rank < c.minRank || rank > c.maxRank) continue;
+      if (entry.value <= 0) continue;
+      final gain =
+          entry.value * ore.coinValue * market.priceMultiplier * (1 + sellBonus);
+      totalCoin += gain;
+      kinds++;
+      invMap.remove(entry.key);
+    }
+
+    if (kinds == 0) {
+      return ActionResult.fail('해당 국가가 매입할 광석이 없습니다');
+    }
+
+    final newMarkets = Map<String, CountryState>.from(_state.markets);
+    newMarkets[countryId] = market.copyWith(
+      totalTrades: market.totalTrades + 1,
+      totalRevenue: market.totalRevenue + totalCoin,
+    );
+
+    _state = _state.copyWith(
+      coin: _state.coin + totalCoin,
+      totalCoinEarned: _state.totalCoinEarned + totalCoin,
+      oreInventory: invMap,
+      markets: newMarkets,
+    );
+    notifyListeners();
+    return ActionResult(ok: true, cost: totalCoin, times: kinds);
+  }
+
+  /// 단일 광석을 특정 국가에 판매
+  ActionResult sellOreToCountry(String oreId) {
+    final count = _state.oreInventory[oreId];
+    if (count == null || count <= 0) return ActionResult.fail('광석 없음');
+    final ore = kOres.firstWhere(
+      (o) => o.id == oreId,
+      orElse: () => kOres.first,
+    );
+    final rank = kOres.indexOf(ore) + 1;
+    final c = countryForRank(rank);
+    if (c == null) return ActionResult.fail('매입 국가 없음');
+    final market = _state.markets[c.id];
+    if (market == null) return ActionResult.fail('시세 미초기화');
+
+    final sellBonus = IdleCalculator.sellBonus(_state);
+    final gain =
+        count * ore.coinValue * market.priceMultiplier * (1 + sellBonus);
+
+    final invMap = Map<String, double>.from(_state.oreInventory);
+    invMap.remove(oreId);
+
+    final newMarkets = Map<String, CountryState>.from(_state.markets);
+    newMarkets[c.id] = market.copyWith(
+      totalTrades: market.totalTrades + 1,
+      totalRevenue: market.totalRevenue + gain,
+    );
+
+    _state = _state.copyWith(
+      coin: _state.coin + gain,
+      totalCoinEarned: _state.totalCoinEarned + gain,
+      oreInventory: invMap,
+      markets: newMarkets,
+    );
+    notifyListeners();
+    return ActionResult(ok: true, cost: gain, times: 1);
+  }
+
+  /// 특정 국가의 현재 시세에서 인벤토리 매도 시 받을 코인 (UI 표시)
+  double previewCountryRevenue(String countryId) {
+    final c = countryById(countryId);
+    final market = _state.markets[countryId];
+    if (market == null) return 0;
+    final sellBonus = IdleCalculator.sellBonus(_state);
+    double total = 0;
+    for (final entry in _state.oreInventory.entries) {
+      if (entry.value <= 0) continue;
+      final ore = kOres.firstWhere(
+        (o) => o.id == entry.key,
+        orElse: () => kOres.first,
+      );
+      final rank = kOres.indexOf(ore) + 1;
+      if (rank < c.minRank || rank > c.maxRank) continue;
+      total += entry.value *
+          ore.coinValue *
+          market.priceMultiplier *
+          (1 + sellBonus);
+    }
+    return total;
+  }
+
+  /// 광석 종류 수 (해당 국가 매입 가능)
+  int countryEligibleKinds(String countryId) {
+    final c = countryById(countryId);
+    int count = 0;
+    for (final entry in _state.oreInventory.entries) {
+      if (entry.value <= 0) continue;
+      final ore = kOres.firstWhere(
+        (o) => o.id == entry.key,
+        orElse: () => kOres.first,
+      );
+      final rank = kOres.indexOf(ore) + 1;
+      if (rank >= c.minRank && rank <= c.maxRank) count++;
+    }
+    return count;
   }
 
   Future<void> persist() async {

@@ -8,6 +8,7 @@ import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
 import '../providers/game_provider.dart';
 import '../widgets/upgrade_card.dart';
+import 'market_view.dart';
 
 /// 상점 화면 — 3 서브탭.
 ///   광석 도감 / 조수 / 광맥 정수.
@@ -17,7 +18,7 @@ class StoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Column(
         children: [
           const _StoreHeader(),
@@ -39,19 +40,21 @@ class StoreScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.all(Radius.circular(7)),
               ),
               labelStyle:
-                  TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
               unselectedLabelStyle:
-                  TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                  TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               tabs: [
-                Tab(height: 36, text: '광석 도감'),
+                Tab(height: 36, text: '거래소'),
+                Tab(height: 36, text: '도감'),
                 Tab(height: 36, text: '조수'),
-                Tab(height: 36, text: '광맥 정수'),
+                Tab(height: 36, text: '정수'),
               ],
             ),
           ),
           const Expanded(
             child: TabBarView(
               children: [
+                MarketView(),
                 _OreCodexTab(),
                 _HelperTab(),
                 _EssenceTab(),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'country.dart';
 import 'helper.dart';
 import 'pickaxe.dart';
 import 'producer.dart';
@@ -42,6 +43,9 @@ class GameState {
   final Map<String, int> prestigeLevels;
   final int rebirthCount;
 
+  /// 국가별 시세 거래소 상태
+  final Map<String, CountryState> markets;
+
   final int layer;
   final bool autoSell;
   final bool autoSellUnlocked;
@@ -63,6 +67,7 @@ class GameState {
     required this.helpers,
     required this.prestigeLevels,
     required this.rebirthCount,
+    required this.markets,
     required this.layer,
     required this.autoSell,
     required this.autoSellUnlocked,
@@ -86,6 +91,7 @@ class GameState {
       helpers: {},
       prestigeLevels: {},
       rebirthCount: 0,
+      markets: {},
       layer: 1,
       autoSell: false,
       autoSellUnlocked: false,
@@ -119,6 +125,7 @@ class GameState {
       },
       prestigeLevels: prestigeLevels,
       rebirthCount: newRebirthCount,
+      markets: markets, // 시세는 환생해도 유지 (시간 자산)
       layer: 1,
       autoSell: autoSell && autoSellUnlocked,
       autoSellUnlocked: autoSellUnlocked,
@@ -142,6 +149,7 @@ class GameState {
     Map<String, HelperState>? helpers,
     Map<String, int>? prestigeLevels,
     int? rebirthCount,
+    Map<String, CountryState>? markets,
     int? layer,
     bool? autoSell,
     bool? autoSellUnlocked,
@@ -163,6 +171,7 @@ class GameState {
       helpers: helpers ?? this.helpers,
       prestigeLevels: prestigeLevels ?? this.prestigeLevels,
       rebirthCount: rebirthCount ?? this.rebirthCount,
+      markets: markets ?? this.markets,
       layer: layer ?? this.layer,
       autoSell: autoSell ?? this.autoSell,
       autoSellUnlocked: autoSellUnlocked ?? this.autoSellUnlocked,
@@ -186,6 +195,7 @@ class GameState {
         'helpers': helpers.map((k, v) => MapEntry(k, v.toJson())),
         'prestigeLevels': prestigeLevels,
         'rebirthCount': rebirthCount,
+        'markets': markets.map((k, v) => MapEntry(k, v.toJson())),
         'layer': layer,
         'autoSell': autoSell,
         'autoSellUnlocked': autoSellUnlocked,
@@ -222,6 +232,10 @@ class GameState {
             (j['prestigeLevels'] as Map<String, dynamic>? ?? const {})
                 .map((k, v) => MapEntry(k, v as int)),
         rebirthCount: j['rebirthCount'] as int? ?? 0,
+        markets: (j['markets'] as Map<String, dynamic>? ?? const {}).map(
+          (k, v) => MapEntry(
+              k, CountryState.fromJson(v as Map<String, dynamic>)),
+        ),
         layer: j['layer'] as int? ?? 1,
         autoSell: j['autoSell'] as bool? ?? false,
         autoSellUnlocked: j['autoSellUnlocked'] as bool? ??
