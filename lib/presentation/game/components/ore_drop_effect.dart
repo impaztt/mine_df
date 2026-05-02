@@ -2,11 +2,13 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
-import 'package:flame/effects.dart';
 import 'package:flutter/material.dart'
     show Colors, FontWeight, TextStyle;
 
-/// 광맥에서 튀어나오는 작은 광석 파편
+/// 광맥에서 튀어나오는 작은 광석 파편.
+///
+/// `OpacityEffect`는 `HasPaint` 컴포넌트가 필요해서 자체 `_alpha`
+/// 변수로 페이드아웃을 처리한다.
 class OreChip extends PositionComponent {
   OreChip({
     required Vector2 origin,
@@ -24,20 +26,10 @@ class OreChip extends PositionComponent {
   @override
   final double angle;
   final double speed;
+
   double _t = 0;
   double _spin = 0;
-
-  @override
-  Future<void> onLoad() async {
-    super.onLoad();
-    add(
-      OpacityEffect.to(
-        0,
-        EffectController(duration: 0.7, startDelay: 0.4),
-        onComplete: removeFromParent,
-      ),
-    );
-  }
+  double _alpha = 1.0;
 
   @override
   void update(double dt) {
@@ -45,11 +37,18 @@ class OreChip extends PositionComponent {
     _t += dt;
     _spin += dt * 6;
 
-    // 포물선 — 위로 튀었다 떨어짐
     final vx = math.cos(angle) * speed;
     final vy = math.sin(angle) * speed - 220; // 위쪽 초기 속도
     position.x += vx * dt;
     position.y += (vy + 700 * _t) * dt; // 중력 누적
+
+    // 0.4초 풀알파 → 그 후 0.7초 동안 페이드아웃
+    if (_t > 0.4) {
+      _alpha = (1 - (_t - 0.4) / 0.7).clamp(0.0, 1.0);
+    }
+    if (_t > 1.2) {
+      removeFromParent();
+    }
   }
 
   @override
@@ -69,18 +68,21 @@ class OreChip extends PositionComponent {
       }
     }
     path.close();
-    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+      path,
+      Paint()..color = color.withValues(alpha: _alpha),
+    );
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.8)
+        ..color = Colors.white.withValues(alpha: 0.8 * _alpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
   }
 }
 
-/// 크리티컬 시 화면에 표시되는 떠오르는 텍스트
+/// 떠오르며 사라지는 텍스트 (콤보 / 크리티컬 표기)
 class FloatingText extends PositionComponent {
   FloatingText({
     required Vector2 origin,
@@ -97,35 +99,30 @@ class FloatingText extends PositionComponent {
   final Color color;
   final double fontSize;
 
-  late TextPaint _painter;
-
-  @override
-  Future<void> onLoad() async {
-    super.onLoad();
-    _painter = TextPaint(
-      style: TextStyle(
-        fontSize: fontSize,
-        color: color,
-        fontWeight: FontWeight.w900,
-      ),
-    );
-    add(
-      OpacityEffect.to(
-        0,
-        EffectController(duration: 0.9),
-        onComplete: removeFromParent,
-      ),
-    );
-  }
+  double _alpha = 1.0;
+  static const double _life = 0.9;
+  double _t = 0;
 
   @override
   void update(double dt) {
     super.update(dt);
+    _t += dt;
     position.y -= 50 * dt;
+    _alpha = (1 - _t / _life).clamp(0.0, 1.0);
+    if (_t >= _life) {
+      removeFromParent();
+    }
   }
 
   @override
   void render(Canvas canvas) {
-    _painter.render(canvas, text, Vector2.zero(), anchor: Anchor.center);
+    final painter = TextPaint(
+      style: TextStyle(
+        fontSize: fontSize,
+        color: color.withValues(alpha: _alpha),
+        fontWeight: FontWeight.w900,
+      ),
+    );
+    painter.render(canvas, text, Vector2.zero(), anchor: Anchor.center);
   }
 }
