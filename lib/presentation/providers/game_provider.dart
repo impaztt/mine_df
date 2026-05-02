@@ -5,17 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/game_constants.dart';
-import '../../data/balance/facility_data.dart';
 import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
-import '../../data/models/enemy_type.dart';
-import '../../data/models/facility.dart';
+import '../../data/balance/pickaxe_data.dart';
 import '../../data/models/game_state.dart';
 import '../../data/models/helper.dart';
 import '../../data/repositories/save_repository.dart';
 import '../../domain/idle_calculator.dart';
 
-/// 게임 액션의 결과 — UI 피드백용
+/// 게임 액션의 결과
 class ActionResult {
   final bool ok;
   final String? message;
@@ -25,15 +23,25 @@ class ActionResult {
   factory ActionResult.fail(String m) => ActionResult(ok: false, message: m);
 }
 
-/// 산신령 보너스 이벤트 정보
+/// 산신령 보너스 이벤트
 class SpiritBonus {
   final String id;
-  final double oreBonus;
   final double coinBonus;
-  SpiritBonus({
-    required this.id,
-    required this.oreBonus,
-    required this.coinBonus,
+  SpiritBonus({required this.id, required this.coinBonus});
+}
+
+/// 채굴 1회 결과 — UI에서 짧은 피드백(콤보, 크리티컬 표시)에 사용
+class MineHit {
+  final int oreAmount;
+  final bool isCritical;
+  final int comboCount;
+  final double coinGained;
+
+  MineHit({
+    required this.oreAmount,
+    required this.isCritical,
+    required this.comboCount,
+    required this.coinGained,
   });
 }
 
@@ -48,15 +56,32 @@ class GameProvider extends ChangeNotifier {
   bool get initialized => _initialized;
 
   /// 시작 시 누적된 오프라인 보상 (UI에서 한 번 표시)
-  double pendingOfflineOre = 0;
+  double pendingOfflineCoin = 0;
 
-  /// 활성 산신령 (탭 가능)
+  /// 활성 산신령
   SpiritBonus? activeSpirit;
   Timer? _spiritTimer;
 
-  /// 게임 틱 타이머 (자동 채굴)
-  Timer? _tickTimer;
-  DateTime _lastTick = DateTime.now();
+  /// 자동 채굴 타이머
+  Timer? _autoMineTimer;
+
+  /// 가장 최근 채굴 시각 (콤보 윈도우 계산용)
+  DateTime? _lastSwingAt;
+
+  /// 탭 가속 쿨다운 종료 시각
+  DateTime _tapCooldownUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 현재 콤보 카운트
+  int _combo = 0;
+  int get combo => _combo;
+
+  /// 가장 최근 채굴 정보 (UI 피드백)
+  MineHit? lastHit;
+
+  /// 호랑이 범 — 마지막 강타 시각
+  DateTime _lastTigerStrikeAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// notifyListeners 빈도 제한 (1Hz UI 갱신)
   int _tickCounter = 0;
 
   // === 초기화 / 종료 ===
@@ -64,13 +89,13 @@ class GameProvider extends ChangeNotifier {
   Future<void> initialize() async {
     final loaded = await _repo.load();
     final now = DateTime.now();
-    pendingOfflineOre = IdleCalculator.offlineOreReward(loaded, now);
+    pendingOfflineCoin = IdleCalculator.offlineCoinReward(loaded, now);
     _state = loaded.copyWith(
-      ore: loaded.ore + pendingOfflineOre,
+      coin: loaded.coin + pendingOfflineCoin,
       lastSavedAt: now.millisecondsSinceEpoch,
     );
     _initialized = true;
-    _startTick();
+    _startAutoMine();
     _scheduleSpirit();
     notifyListeners();
     await _repo.save(_state);
@@ -78,7 +103,7 @@ class GameProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _tickTimer?.cancel();
+    _autoMineTimer?.cancel();
     _spiritTimer?.cancel();
     super.dispose();
   }
@@ -90,187 +115,272 @@ class GameProvider extends ChangeNotifier {
     await _repo.save(_state);
   }
 
-  // === 게임 틱 ===
+  // === 자동 채굴 ===
 
-  void _startTick() {
-    _tickTimer?.cancel();
-    _lastTick = DateTime.now();
-    _tickTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
-      final now = DateTime.now();
-      final dt = now.difference(_lastTick).inMilliseconds / 1000.0;
-      _lastTick = now;
-      _tick(dt);
-    });
-  }
-
-  /// 자동 채굴 적용 — 광물은 매 tick 누적하되 UI는 1초에 한 번만 알림
-  void _tick(double dt) {
-    final rate = IdleCalculator.oreRatePerSecond(_state);
-    if (rate <= 0) return;
-    _state = _state.copyWith(ore: _state.ore + rate * dt);
-    _tickCounter++;
-    if (_tickCounter >= 4) {
-      _tickCounter = 0;
-      notifyListeners();
-    }
-  }
-
-  // === 광물 / 코인 (전투 시스템에서 호출) ===
-
-  /// 발사체가 적에게 피해를 줄 때, 광물을 소모하지는 않음 (광물은 자동 채굴됨)
-  /// 단 데미지는 현재 장착 광물 + 조수 강화에 의해 결정됨
-  double currentDamage() {
-    final ore = oreForDay(_state.day) ?? kOres.first;
-    double base = ore.damageMul *
-        (1 + math.log(_state.ore + 10) / math.ln10 * 0.1);
-    // 조수 데미지 합산
-    for (final h in _state.helpers.values) {
-      if (!h.recruited) continue;
-      final def = helperById(h.id);
-      base *= (1 + helperDamageMul(def, h.level));
-    }
-    return base.clamp(1.0, double.infinity);
-  }
-
-  double currentFireRate() {
-    double rate = GameConstants.baseFireRate;
-    for (final h in _state.helpers.values) {
-      if (!h.recruited) continue;
-      final def = helperById(h.id);
-      rate += helperFireBonus(def, h.level);
-    }
-    return rate;
-  }
-
-  double currentEnemyHp(EnemyDef def, {bool isBoss = false}) {
-    final base = GameConstants.baseEnemyHp *
-        math.pow(GameConstants.enemyHpGrowth, _state.day - 1);
-    final mul = isBoss ? GameConstants.bossHpMultiplier : 1.0;
-    return base * def.hpMul * mul;
-  }
-
-  double currentCoinReward(EnemyDef def) {
-    final base = GameConstants.baseCoinReward *
-        math.pow(GameConstants.coinGrowth, _state.day - 1);
-    return base * def.coinMul;
-  }
-
-  /// 적 처치 시 호출 — 손님이면 보너스, 침입자면 코인만
-  void onEnemyKilled(EnemyDef def) {
-    final coin = currentCoinReward(def);
-    double coinGain = coin;
-    // 토끼 달이가 영입된 경우 코인 +20%
-    final dali = _state.helpers['rabbit_dali'];
-    if (dali != null && dali.recruited) {
-      coinGain *= 1.20;
-    }
-    _state = _state.copyWith(
-      coin: _state.coin + coinGain,
-      dayKills: def.kind == EnemyKind.boss
-          ? _state.dayKills
-          : _state.dayKills + 1,
+  void _startAutoMine() {
+    _autoMineTimer?.cancel();
+    // 250ms 마다 검사하면서 swing interval 도달 시 채굴
+    _autoMineTimer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _autoMineTick(),
     );
+  }
 
-    if (def.kind == EnemyKind.boss) {
-      // 보스 처치 → DAY 클리어
-      _advanceDay();
+  void _autoMineTick() {
+    final now = DateTime.now();
+    final interval = _effectiveSwingInterval();
+    final lastAt = _lastSwingAt;
+    if (lastAt == null ||
+        now.difference(lastAt).inMilliseconds >= interval * 1000) {
+      _performMine(now: now, isTap: false);
     } else {
-      _checkDayProgress();
-    }
-    notifyListeners();
-  }
-
-  /// 적이 광산에 도달함
-  void onEnemyReachedMine(EnemyDef def) {
-    switch (def.kind) {
-      case EnemyKind.customer:
-        // 손님은 도달해도 페널티 없음 (단, 보상도 없음)
-        // 다음 적 카운트만 증가시켜 DAY 진행이 막히지 않게
-        _state = _state.copyWith(dayKills: _state.dayKills + 1);
-        _checkDayProgress();
-        break;
-      case EnemyKind.intruder:
-        // 광물 약탈 (5초치) + 광산 체력 -1
-        final loss = IdleCalculator.oreRatePerSecond(_state) * 5;
-        final newHp = (_state.mineHp - 1).clamp(0, 5);
-        _state = _state.copyWith(
-          ore: math.max(0, _state.ore - loss),
-          mineHp: newHp,
-          dayKills: _state.dayKills + 1,
-        );
-        if (newHp <= 0) {
-          // DAY 실패 — DAY 유지 + 체력 회복
-          _state = _state.copyWith(mineHp: 5, dayKills: 0, bossPhase: false);
-        } else {
-          _checkDayProgress();
-        }
-        break;
-      case EnemyKind.boss:
-        // 보스가 광산에 도달 — 페널티 크게
-        _state = _state.copyWith(
-          mineHp: (_state.mineHp - 2).clamp(0, 5),
-        );
-        if (_state.mineHp <= 0) {
-          _state = _state.copyWith(mineHp: 5, dayKills: 0, bossPhase: false);
-        }
-        break;
-    }
-    notifyListeners();
-  }
-
-  void _checkDayProgress() {
-    final required = GameConstants.enemiesPerDay(_state.day);
-    if (_state.dayKills >= required && !_state.bossPhase) {
-      // 보스 등장 조건? — 10 DAY 마다
-      if (_state.day % GameConstants.bossDayInterval == 0) {
-        _state = _state.copyWith(bossPhase: true);
-      } else {
-        _advanceDay();
+      // 1초마다 정도 UI에 갱신 알림 (콤보 만료, 등)
+      _tickCounter++;
+      if (_tickCounter >= 5) {
+        _tickCounter = 0;
+        _maybeExpireCombo(now);
+        notifyListeners();
       }
     }
   }
 
-  void _advanceDay() {
-    final newDay = _state.day + 1;
-    int newLayer = _state.layer;
-    if (newDay > 1 &&
-        (newDay - 1) % GameConstants.depthLayerInterval == 0 &&
-        newLayer < GameConstants.maxLayer) {
-      newLayer = newLayer + 1;
+  void _maybeExpireCombo(DateTime now) {
+    final lastAt = _lastSwingAt;
+    if (lastAt == null) return;
+    if (now.difference(lastAt).inMilliseconds >
+        (GameConstants.comboWindow * 1000).round()) {
+      if (_combo > 0) {
+        _combo = 0;
+      }
     }
-    _state = _state.copyWith(
-      day: newDay,
-      dayKills: 0,
-      bossPhase: false,
-      mineHp: 5, // DAY 클리어 시 광산 체력 회복
-      layer: newLayer,
-    );
-    persist();
   }
 
-  // === 시설 / 조수 액션 ===
+  // === 채굴 액션 ===
 
-  ActionResult buyOrUpgradeFacility(String id) {
-    final def = facilityById(id);
-    if (_state.day < def.unlockDay) {
-      return ActionResult.fail('DAY ${def.unlockDay} 부터 해금됩니다');
+  /// 화면 탭 — 즉시 추가 곡괭이질
+  ActionResult tap() {
+    final now = DateTime.now();
+    if (now.isBefore(_tapCooldownUntil)) {
+      return ActionResult.fail('잠시만!');
     }
-    final cur = _state.facilities[id];
-    final level = cur?.level ?? 0;
-    final cost = facilityUpgradeCost(def, level);
+    _tapCooldownUntil =
+        now.add(Duration(milliseconds: (GameConstants.tapCooldown * 1000).round()));
+    _performMine(now: now, isTap: true);
+    return ActionResult.success;
+  }
+
+  void _performMine({required DateTime now, required bool isTap}) {
+    final lastAt = _lastSwingAt;
+    final withinCombo = lastAt != null &&
+        now.difference(lastAt).inMilliseconds <=
+            (GameConstants.comboWindow * 1000).round();
+    _combo = withinCombo ? (_combo + 1).clamp(0, 999) : 1;
+    _lastSwingAt = now;
+
+    // 채굴 광석 수
+    int amount = PickaxeBalance.orePerSwing(_state.pickaxe);
+    final dmgBonus = _damageBonus();
+    amount = (amount * (1 + dmgBonus)).round().clamp(1, 1 << 30);
+
+    // 콤보 보너스 (탭일 때만 — 자동은 아주 약간만)
+    final comboMul = _comboMultiplier();
+    if (isTap) {
+      amount = (amount * comboMul).round();
+    }
+
+    // 크리티컬
+    final critChance = _critChance();
+    final isCritical = _rng.nextDouble() * 100 < critChance;
+    if (isCritical) {
+      amount = (amount * GameConstants.critMultiplier).round();
+    }
+
+    // 호랑이 범 — 8초마다 ×10 일격
+    final tiger = _state.helpers['tiger_beom'];
+    if (tiger != null && tiger.recruited) {
+      if (now.difference(_lastTigerStrikeAt).inSeconds >= 8) {
+        _lastTigerStrikeAt = now;
+        amount *= 10;
+      }
+    }
+
+    // 구미호 — 일정 확률로 ×2
+    final gumiho = _state.helpers['gumiho_yawol'];
+    if (gumiho != null && gumiho.recruited) {
+      final p = 0.015 * gumiho.level * 100; // 백분율
+      if (_rng.nextDouble() * 100 < p) {
+        amount *= 2;
+      }
+    }
+
+    // 광석 → 코인 또는 인벤토리
+    final ore = oreByRank(_state.mineRank);
+    final sellBonus = _sellBonus();
+    final coinGain =
+        amount * ore.coinValue * (1 + sellBonus);
+
+    final newDiscovered = _state.discoveredOres.contains(ore.id)
+        ? _state.discoveredOres
+        : <String>{..._state.discoveredOres, ore.id};
+
+    if (_state.autoSell) {
+      _state = _state.copyWith(
+        coin: _state.coin + coinGain,
+        totalSwings: _state.totalSwings + 1,
+        discoveredOres: newDiscovered,
+      );
+    } else {
+      final inv = Map<String, double>.from(_state.oreInventory);
+      inv[ore.id] = (inv[ore.id] ?? 0) + amount;
+      _state = _state.copyWith(
+        oreInventory: inv,
+        totalSwings: _state.totalSwings + 1,
+        discoveredOres: newDiscovered,
+      );
+    }
+
+    lastHit = MineHit(
+      oreAmount: amount,
+      isCritical: isCritical,
+      comboCount: _combo,
+      coinGained: _state.autoSell ? coinGain : 0,
+    );
+
+    notifyListeners();
+  }
+
+  double _effectiveSwingInterval() {
+    final base = PickaxeBalance.swingInterval(_state.pickaxe);
+    final speedBonus = _speedBonus();
+    return (base / (1 + speedBonus)).clamp(0.10, 5.0);
+  }
+
+  double _damageBonus() {
+    double b = 0;
+    for (final h in _state.helpers.values) {
+      if (!h.recruited) continue;
+      final def = helperById(h.id);
+      b += helperDamageMul(def, h.level);
+    }
+    return b;
+  }
+
+  double _speedBonus() {
+    double b = 0;
+    for (final h in _state.helpers.values) {
+      if (!h.recruited) continue;
+      final def = helperById(h.id);
+      b += helperFireBonus(def, h.level);
+    }
+    return b;
+  }
+
+  double _critChance() {
+    double c = GameConstants.baseCritChance;
+    final chichi = _state.helpers['magpie_chichi'];
+    if (chichi != null && chichi.recruited) {
+      c += chichi.level.toDouble();
+    }
+    return c.clamp(0, 80);
+  }
+
+  double _sellBonus() {
+    final dali = _state.helpers['rabbit_dali'];
+    if (dali == null || !dali.recruited) return 0;
+    return 0.06 * dali.level;
+  }
+
+  double _comboMultiplier() {
+    final mults = GameConstants.comboMultipliers;
+    final idx = _combo.clamp(0, mults.length - 1);
+    return mults[idx];
+  }
+
+  final math.Random _rng = math.Random();
+
+  // === 환전 / 자동매도 토글 ===
+
+  void toggleAutoSell() {
+    _state = _state.copyWith(autoSell: !_state.autoSell);
+    notifyListeners();
+  }
+
+  /// 인벤토리에 모인 광석을 일괄 환전
+  void sellAllInventory() {
+    if (_state.oreInventory.isEmpty) return;
+    final sellBonus = _sellBonus();
+    double gained = 0;
+    for (final entry in _state.oreInventory.entries) {
+      final def = kOres.firstWhere(
+        (o) => o.id == entry.key,
+        orElse: () => kOres.first,
+      );
+      gained += entry.value * def.coinValue * (1 + sellBonus);
+    }
+    _state = _state.copyWith(
+      coin: _state.coin + gained,
+      oreInventory: const {},
+    );
+    notifyListeners();
+  }
+
+  // === 업그레이드 ===
+
+  ActionResult upgradePickaxeDamage() {
+    final cost =
+        PickaxeBalance.damageUpgradeCost(_state.pickaxe.damageLevel);
     if (_state.coin < cost) {
       return ActionResult.fail('코인이 부족합니다');
     }
-    final next = FacilityState(id: id, level: level + 1);
-    final newMap = Map<String, FacilityState>.from(_state.facilities);
-    newMap[id] = next;
     _state = _state.copyWith(
       coin: _state.coin - cost,
-      facilities: newMap,
+      pickaxe: _state.pickaxe
+          .copyWith(damageLevel: _state.pickaxe.damageLevel + 1),
     );
     notifyListeners();
     return ActionResult.success;
   }
+
+  ActionResult upgradePickaxeSpeed() {
+    final cost =
+        PickaxeBalance.speedUpgradeCost(_state.pickaxe.speedLevel);
+    if (_state.coin < cost) {
+      return ActionResult.fail('코인이 부족합니다');
+    }
+    _state = _state.copyWith(
+      coin: _state.coin - cost,
+      pickaxe: _state.pickaxe
+          .copyWith(speedLevel: _state.pickaxe.speedLevel + 1),
+    );
+    notifyListeners();
+    return ActionResult.success;
+  }
+
+  ActionResult upgradeMineRank() {
+    if (_state.mineRank >= maxMineRank) {
+      return ActionResult.fail('이미 최고 등급입니다');
+    }
+    final cost = mineUpgradeCost(_state.mineRank);
+    if (_state.coin < cost) {
+      return ActionResult.fail('코인이 부족합니다');
+    }
+    final newRank = _state.mineRank + 1;
+    // 층 자동 진입
+    int newLayer = ((newRank - 1) ~/ GameConstants.oreRanksPerLayer) + 1;
+    if (newLayer > GameConstants.maxLayer) newLayer = GameConstants.maxLayer;
+
+    final newOreId = oreByRank(newRank).id;
+    _state = _state.copyWith(
+      coin: _state.coin - cost,
+      mineRank: newRank,
+      layer: newLayer,
+      discoveredOres: {..._state.discoveredOres, newOreId},
+    );
+    notifyListeners();
+    return ActionResult.success;
+  }
+
+  // === 조수 ===
 
   ActionResult recruitOrUpgradeHelper(String id) {
     final def = helperById(id);
@@ -278,7 +388,6 @@ class GameProvider extends ChangeNotifier {
     final newMap = Map<String, HelperState>.from(_state.helpers);
 
     if (cur == null || !cur.recruited) {
-      // 영입
       if (_state.coin < def.recruitCost) {
         return ActionResult.fail('코인이 부족합니다');
       }
@@ -288,7 +397,6 @@ class GameProvider extends ChangeNotifier {
         helpers: newMap,
       );
     } else {
-      // 강화
       final cost = helperUpgradeCost(def, cur.level);
       if (_state.coin < cost) {
         return ActionResult.fail('코인이 부족합니다');
@@ -303,40 +411,25 @@ class GameProvider extends ChangeNotifier {
     return ActionResult.success;
   }
 
-  /// 광물 장착 변경
-  void equipOre(String oreId) {
-    final ore = kOres.firstWhere(
-      (o) => o.id == oreId,
-      orElse: () => kOres.first,
-    );
-    if (_state.day < ore.unlockDay) return;
-    _state = _state.copyWith(equippedOreId: oreId);
-    notifyListeners();
-  }
-
-  // === 산신령 (보너스 이벤트) ===
+  // === 산신령 ===
 
   void _scheduleSpirit() {
     _spiritTimer?.cancel();
-    final rng = math.Random();
     final minS = GameConstants.spiritMinInterval.inSeconds;
     final maxS = GameConstants.spiritMaxInterval.inSeconds;
-    final sec = minS + rng.nextInt(maxS - minS + 1);
+    final sec = minS + _rng.nextInt(maxS - minS + 1);
     _spiritTimer = Timer(Duration(seconds: sec), _spawnSpirit);
   }
 
   void _spawnSpirit() {
-    final rate = IdleCalculator.oreRatePerSecond(_state);
+    final coinPerSec = IdleCalculator.coinPerSecond(_state);
     activeSpirit = SpiritBonus(
       id: 'spirit_${DateTime.now().millisecondsSinceEpoch}',
-      oreBonus: rate * GameConstants.spiritRewardMultiplier,
-      coinBonus: 50.0 *
-          math.pow(GameConstants.coinGrowth, _state.day - 1).toDouble(),
+      coinBonus: math.max(coinPerSec * 90.0, 100.0),
     );
     notifyListeners();
-    // 15초 후 자동 사라짐
     Timer(const Duration(seconds: 15), () {
-      if (activeSpirit?.id == activeSpirit?.id) {
+      if (activeSpirit != null) {
         activeSpirit = null;
         notifyListeners();
         _scheduleSpirit();
@@ -348,7 +441,6 @@ class GameProvider extends ChangeNotifier {
     final s = activeSpirit;
     if (s == null) return;
     _state = _state.copyWith(
-      ore: _state.ore + s.oreBonus * multiplier,
       coin: _state.coin + s.coinBonus * multiplier,
     );
     activeSpirit = null;
@@ -361,7 +453,19 @@ class GameProvider extends ChangeNotifier {
   Future<void> hardReset() async {
     await _repo.clear();
     _state = GameState.initial();
+    _combo = 0;
+    _lastSwingAt = null;
     notifyListeners();
+  }
+
+  // === 디버그 헬퍼 (UI에서 노출용 read-only) ===
+
+  double get currentSwingInterval => _effectiveSwingInterval();
+  double get currentCritChance => _critChance();
+  double get currentSellBonus => _sellBonus();
+  int get currentOrePerSwing {
+    final base = PickaxeBalance.orePerSwing(_state.pickaxe);
+    return (base * (1 + _damageBonus())).round();
   }
 }
 
@@ -373,7 +477,6 @@ final saveRepositoryProvider =
 final gameProvider = ChangeNotifierProvider<GameProvider>((ref) {
   final repo = ref.watch(saveRepositoryProvider);
   final p = GameProvider(repo);
-  // 자동 저장 주기 (10초)
   Timer.periodic(const Duration(seconds: 10), (_) {
     if (p.initialized) p.persist();
   });
@@ -382,3 +485,9 @@ final gameProvider = ChangeNotifierProvider<GameProvider>((ref) {
   });
   return p;
 });
+
+// ignore: unused_element
+void _dbgUnused() {
+  // ChangeNotifier 사용을 보장하기 위한 더미 (foundation import 유지)
+  ChangeNotifier();
+}

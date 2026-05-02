@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'tier.dart';
 
-/// 발사용 광물 정의 (정적 데이터)
+/// 광석 정의 — 광맥에서 캐지는 자원의 한 종류.
+///
+/// 광부는 한 번에 한 가지 광석만 캐며, 광맥 등급(`mineRank`)에 따라
+/// 무엇을 캐는지 결정된다. 광석은 `coinValue`로 즉시 환전된다.
 class OreDef {
   final String id;
   final String name;
   final String emoji;
   final Tier tier;
   final Color color;
-  final int unlockDay;
-  final String description;
 
-  /// 데미지 배수 (기본 광물=1.0)
-  final double damageMul;
+  /// 광석 1개당 코인 가치
+  final double coinValue;
+
+  /// 도감용 백스토리
+  final String description;
 
   const OreDef({
     required this.id,
@@ -20,8 +24,7 @@ class OreDef {
     required this.emoji,
     required this.tier,
     required this.color,
-    required this.unlockDay,
+    required this.coinValue,
     required this.description,
-    this.damageMul = 1.0,
   });
 }

@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
-import '../../core/constants/game_constants.dart';
 import '../../core/utils/big_number.dart';
 import '../../data/balance/ore_data.dart';
 import '../game/starlit_mine_game.dart';
@@ -12,8 +11,8 @@ import '../providers/game_provider.dart';
 import '../widgets/offline_reward_dialog.dart';
 import '../widgets/resource_chip.dart';
 import 'codex_sheet.dart';
-import 'facility_sheet.dart';
 import 'helper_sheet.dart';
+import 'pickaxe_sheet.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -26,8 +25,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver {
   StarlitMineGame? _game;
   int _lastLayer = 1;
+  int _lastMineRank = 1;
   int _lastHelperHash = 0;
   bool _initShown = false;
+  MineHit? _lastShownHit;
 
   @override
   void initState() {
@@ -43,17 +44,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
     if (!mounted) return;
 
-    if (!_initShown && game.pendingOfflineOre > 0) {
+    if (!_initShown && game.pendingOfflineCoin > 0) {
       _initShown = true;
-      // 첫 프레임 이후 다이얼로그
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await OfflineRewardDialog.show(context, game.pendingOfflineOre);
-        game.pendingOfflineOre = 0;
+        await OfflineRewardDialog.show(context, game.pendingOfflineCoin);
+        game.pendingOfflineCoin = 0;
       });
     }
 
     _game = StarlitMineGame(providerRef: () => ref.read(gameProvider));
     _lastLayer = game.state.layer;
+    _lastMineRank = game.state.mineRank;
     _lastHelperHash = _hashHelpers();
     setState(() {});
   }
@@ -91,45 +92,48 @@ class _MainScreenState extends ConsumerState<MainScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // 상단바는 화폐만 보면 되므로 별도 Consumer로 격리
             Consumer(
-              builder: (_, ref, __) {
+              builder: (_, ref, _) {
                 ref.watch(gameProvider);
-                return _topBar(null);
+                return _topBar();
               },
             ),
             Expanded(
               child: Stack(
                 children: [
-                  // GameWidget은 절대 부모 리빌드의 영향을 받지 않게 분리.
-                  // _game 인스턴스는 안정적이므로 RepaintBoundary로 격리.
                   RepaintBoundary(child: _gameView()),
-                  // 산신령 배지만 별도 Consumer
                   Consumer(
-                    builder: (_, ref, __) {
+                    builder: (_, ref, _) {
                       final game = ref.watch(gameProvider);
-                      // 광맥/조수 동기화는 여기서만 수행
-                      _maybeSyncGame(game.state);
-                      if (game.activeSpirit == null) {
-                        return const SizedBox.shrink();
-                      }
-                      return Positioned(
-                        top: 24,
-                        right: 16,
-                        child: _SpiritBadge(
-                          onTap: () => game.claimSpirit(),
-                        ),
+                      _maybeSyncGame(game);
+                      return Stack(
+                        children: [
+                          if (game.activeSpirit != null)
+                            Positioned(
+                              top: 16,
+                              right: 16,
+                              child: _SpiritBadge(
+                                onTap: () => game.claimSpirit(),
+                              ),
+                            ),
+                          // 콤보 카운터
+                          if (game.combo >= 2)
+                            Positioned(
+                              top: 16,
+                              left: 16,
+                              child: _ComboBadge(combo: game.combo),
+                            ),
+                        ],
                       );
                     },
                   ),
                 ],
               ),
             ),
-            // 하단바도 별도 Consumer
             Consumer(
-              builder: (_, ref, __) {
+              builder: (_, ref, _) {
                 final game = ref.watch(gameProvider);
-                return _bottomBar(game.state);
+                return _bottomBar(game);
               },
             ),
           ],
@@ -138,16 +142,27 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  void _maybeSyncGame(dynamic state) {
+  void _maybeSyncGame(GameProvider game) {
     if (_game == null) return;
+    final state = game.state;
     if (state.layer != _lastLayer) {
       _lastLayer = state.layer;
       _game!.syncLayer(state.layer);
+    }
+    if (state.mineRank != _lastMineRank) {
+      _lastMineRank = state.mineRank;
+      _game!.syncMineRank(state.mineRank);
     }
     final hh = _hashHelpers();
     if (hh != _lastHelperHash) {
       _lastHelperHash = hh;
       _game!.syncHelpers();
+    }
+    // 채굴 hit 동기화 (별이 swing + chip 발사)
+    final h = game.lastHit;
+    if (h != null && !identical(h, _lastShownHit)) {
+      _lastShownHit = h;
+      _game!.notifyMineHit(h);
     }
   }
 
@@ -163,7 +178,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _topBar(dynamic state) {
+  Widget _topBar() {
     final game = ref.read(gameProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -192,11 +207,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _bottomBar(dynamic state) {
-    final required = GameConstants.enemiesPerDay(state.day);
-    final progress =
-        (state.dayKills / required).clamp(0.0, 1.0).toDouble();
-    final ore = oreForDay(state.day) ?? kOres.first;
+  Widget _bottomBar(GameProvider game) {
+    final state = game.state;
+    final ore = oreByRank(state.mineRank);
+    final coinPerSec = (1 / game.currentSwingInterval) *
+        game.currentOrePerSwing *
+        ore.coinValue *
+        (1 + game.currentSellBonus);
 
     return Container(
       decoration: const BoxDecoration(
@@ -212,79 +229,65 @@ class _MainScreenState extends ConsumerState<MainScreen>
             Row(
               children: [
                 _resourceTile(
-                  Icons.terrain,
-                  '광물',
-                  BigNumberFormat.format(state.ore),
-                  AppColors.crystalTeal,
-                ),
-                const SizedBox(width: 10),
-                _resourceTile(
                   Icons.monetization_on_outlined,
                   '코인',
                   BigNumberFormat.format(state.coin),
                   AppColors.gold,
+                  subtitle:
+                      '+${BigNumberFormat.format(coinPerSec)}/s',
                 ),
                 const SizedBox(width: 10),
-                _hpDisplay(state.mineHp),
+                _autoSellToggle(game, state.autoSell),
               ],
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  state.bossPhase ? 'DAY ${state.day} · 보스!' : 'DAY ${state.day}',
-                  style: TextStyle(
-                    color: state.bossPhase
-                        ? const Color(0xFFFF6B5C)
-                        : AppColors.starlightCream,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                )
-                    .animate(target: state.bossPhase ? 1 : 0)
-                    .shake(hz: 2, duration: 600.ms),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: state.bossPhase ? 1 : progress,
-                      minHeight: 8,
-                      backgroundColor: AppColors.cardBackgroundLight,
-                      valueColor: AlwaysStoppedAnimation(
-                        state.bossPhase
-                            ? const Color(0xFFFF6B5C)
-                            : AppColors.gold,
-                      ),
+            // 현재 광석 라벨
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackgroundLight,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: ore.color.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(ore.emoji, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ore.name,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          '곡괭이 데미지 ×${game.currentOrePerSwing} · '
+                          '간격 ${game.currentSwingInterval.toStringAsFixed(2)}s',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  state.bossPhase
-                      ? 'BOSS'
-                      : '${state.dayKills}/$required',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                  Text(
+                    '${state.layer}층',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.layers, size: 12, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                Text(
-                  '${state.layer}층 · 발사: ${ore.name}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -292,8 +295,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 Expanded(
                   child: _bottomBtn(
                     icon: Icons.handyman,
-                    label: '시설',
-                    onTap: () => _open(const FacilitySheet()),
+                    label: '곡괭이',
+                    onTap: () => _open(const PickaxeSheet()),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -321,7 +324,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
   }
 
   Widget _resourceTile(
-      IconData icon, String label, String value, Color color) {
+    IconData icon,
+    String label,
+    String value,
+    Color color, {
+    String? subtitle,
+  }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -337,18 +345,33 @@ class _MainScreenState extends ConsumerState<MainScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -362,27 +385,42 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _hpDisplay(int hp) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackgroundLight,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: List.generate(5, (i) {
-          final filled = i < hp;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: Icon(
-              filled ? Icons.favorite : Icons.favorite_border,
-              size: 14,
-              color: filled
-                  ? const Color(0xFFFF6B9D)
-                  : AppColors.dividerColor,
+  Widget _autoSellToggle(GameProvider game, bool autoSell) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => game.toggleAutoSell(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: autoSell
+              ? AppColors.gold.withValues(alpha: 0.18)
+              : AppColors.cardBackgroundLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: autoSell ? AppColors.gold : AppColors.dividerColor,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              autoSell ? Icons.toggle_on : Icons.toggle_off,
+              color: autoSell ? AppColors.gold : AppColors.textSecondary,
+              size: 18,
             ),
-          );
-        }),
+            const SizedBox(height: 1),
+            Text(
+              autoSell ? '자동환전' : '수집모드',
+              style: TextStyle(
+                fontSize: 9,
+                color: autoSell
+                    ? AppColors.gold
+                    : AppColors.textSecondary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -435,7 +473,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
         backgroundColor: AppColors.cardBackground,
         title: const Text('설정'),
         content: const Text(
-          '별빛 광산 v0.1.0\n프로토타입 빌드입니다.',
+          '별빛 광산 v0.2.0\n방치형 채굴 클리커.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
@@ -476,12 +514,6 @@ class _SpiritBadge extends StatelessWidget {
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(color: AppColors.gold, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.gold.withValues(alpha: 0.5),
-                blurRadius: 12,
-              ),
-            ],
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
@@ -502,5 +534,38 @@ class _SpiritBadge extends StatelessWidget {
           .animate(onPlay: (c) => c.repeat(reverse: true))
           .scaleXY(begin: 1, end: 1.06, duration: 700.ms),
     );
+  }
+}
+
+class _ComboBadge extends StatelessWidget {
+  const _ComboBadge({required this.combo});
+  final int combo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.rubyPink, width: 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.flash_on, color: AppColors.rubyPink, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            '×$combo',
+            style: const TextStyle(
+              color: AppColors.rubyPink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    )
+        .animate(key: ValueKey(combo))
+        .scaleXY(begin: 1.4, end: 1.0, duration: 200.ms);
   }
 }

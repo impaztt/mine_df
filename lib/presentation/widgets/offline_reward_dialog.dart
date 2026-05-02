@@ -36,15 +36,15 @@ class OfflineRewardDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              '광부들이 부지런히 광물을 캤어요',
+              '광부들이 부지런히 광석을 캐서 팔았어요',
               style: TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.diamond_outlined,
-                    color: AppColors.crystalTeal, size: 28),
+                const Icon(Icons.monetization_on_outlined,
+                    color: AppColors.gold, size: 28),
                 const SizedBox(width: 8),
                 Text(
                   '+${BigNumberFormat.format(amount)}',

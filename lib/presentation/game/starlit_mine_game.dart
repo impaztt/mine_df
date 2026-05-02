@@ -2,48 +2,35 @@ import 'dart:math' as math;
 
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/material.dart' show Color;
 
 import '../../data/balance/helper_data.dart';
-import '../../data/models/enemy_type.dart';
+import '../../data/balance/ore_data.dart';
 import '../../data/models/game_state.dart';
 import '../providers/game_provider.dart';
 import 'components/background_component.dart';
 import 'components/byeori_component.dart';
-import 'components/enemy_component.dart';
 import 'components/helper_component.dart';
-import 'components/mine_component.dart';
-import 'systems/auto_fire_system.dart';
-import 'systems/enemy_spawner.dart';
+import 'components/ore_drop_effect.dart';
+import 'components/vein_component.dart';
 
-/// 별빛 광산 — Flame 게임 월드.
-/// Riverpod의 [GameProvider]와 양방향 연결되어 상태/액션을 동기화한다.
+/// 별빛 광산 — Flame 게임 월드. 광맥 채굴 클리커.
 class StarlitMineGame extends FlameGame with TapCallbacks {
   StarlitMineGame({required this.providerRef});
 
-  /// 외부에서 주입받은 GameProvider 접근자 (UI 레이어에서 set)
   GameProvider Function() providerRef;
 
   late BackgroundComponent _background;
   late ByeoriComponent byeori;
-  late MineComponent _mine;
-  late EnemySpawner _spawner;
-  late AutoFireSystem _autoFire;
+  late VeinComponent vein;
 
-  /// 살아있는 적 목록 (스폰/AutoFire에서 참조)
-  final List<EnemyComponent> aliveEnemies = [];
-  int get aliveEnemyCount => aliveEnemies.length;
-
-  /// 조수 컴포넌트 — provider 변경 시 재구성
   final List<HelperComponent> _helperComponents = [];
+  final math.Random _rng = math.Random();
+
+  /// 외부에서 들어오는 마지막 채굴 정보 (콤보/크리티컬 표시)
+  MineHit? _lastShownHit;
 
   GameState? get gameState => providerRef().state;
-
-  // === 전투 파라미터 (provider에서 계산해서 가져옴) ===
-  double get currentDamage => providerRef().currentDamage();
-  double get fireRate => providerRef().currentFireRate();
-
-  double computeEnemyHp(EnemyDef def, {bool isBoss = false}) =>
-      providerRef().currentEnemyHp(def, isBoss: isBoss);
 
   @override
   Future<void> onLoad() async {
@@ -52,17 +39,12 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
         BackgroundComponent(layer: gameState?.layer ?? 1);
     add(_background);
 
-    _mine = MineComponent();
-    add(_mine);
+    final ore = oreByRank(gameState?.mineRank ?? 1);
+    vein = VeinComponent(ore: ore);
+    add(vein);
 
     byeori = ByeoriComponent();
     add(byeori);
-
-    _spawner = EnemySpawner();
-    add(_spawner);
-
-    _autoFire = AutoFireSystem();
-    add(_autoFire);
 
     _layoutScene();
     _rebuildHelpers();
@@ -77,29 +59,33 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
   void _layoutScene() {
     if (!isLoaded) return;
     final s = size;
-    _mine.position = Vector2(s.x / 2, s.y * 0.86);
-    byeori.position = Vector2(s.x / 2, s.y * 0.86 - 6);
+    // 광맥은 화면 가운데
+    vein.position = Vector2(s.x / 2, s.y * 0.46);
+    // 별이는 광맥 왼쪽 아래
+    byeori.position = Vector2(s.x / 2 - 110, s.y * 0.46 + 80);
+    byeori.aimAngle = -math.pi / 6;
     _layoutHelpers();
   }
 
   void _layoutHelpers() {
     final s = size;
-    final baseY = s.y * 0.86 + 4;
+    final baseY = s.y * 0.46 + 80;
     for (int i = 0; i < _helperComponents.length; i++) {
       final h = _helperComponents[i];
-      // 별이 양 옆에 번갈아 배치
-      final dir = i.isEven ? -1 : 1;
-      final dist = 60 + (i ~/ 2) * 50;
-      h.position = Vector2(s.x / 2 + dir * dist, baseY);
+      // 광맥 오른쪽으로 조수 배치
+      final dx = 110 + i * 56;
+      h.position = Vector2(s.x / 2 + dx, baseY);
     }
   }
 
-  /// provider에서 조수 변경 알림 받으면 호출
   void syncHelpers() => _rebuildHelpers();
 
-  /// 광맥 깊이 변경 시 배경 갱신
   void syncLayer(int layer) {
     _background.layer = layer;
+  }
+
+  void syncMineRank(int rank) {
+    vein.setOre(oreByRank(rank));
   }
 
   void _rebuildHelpers() {
@@ -117,61 +103,58 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
       _helperComponents.add(comp);
       add(comp);
       idx++;
-      if (idx >= 3) break; // 동시 표시 최대 3마리
+      if (idx >= 3) break;
     }
     _layoutHelpers();
   }
 
-  void registerEnemy(EnemyComponent e) {
-    aliveEnemies.add(e);
-  }
+  /// 외부에서 채굴 액션이 일어났음을 알림 (Provider → Game 동기화)
+  void notifyMineHit(MineHit hit) {
+    if (identical(hit, _lastShownHit)) return;
+    _lastShownHit = hit;
 
-  void onEnemyKilled(EnemyComponent e) {
-    aliveEnemies.remove(e);
-    providerRef().onEnemyKilled(e.def);
-  }
+    byeori.swing();
+    vein.onHit(isCritical: hit.isCritical);
+    _spawnChips(hit.isCritical ? 6 : 3);
 
-  void onEnemyReachedMine(EnemyComponent e) {
-    aliveEnemies.remove(e);
-    providerRef().onEnemyReachedMine(e.def);
-  }
-
-  /// DAY 클리어 시 화면의 일반 적은 정리 (보스전 진입 등)
-  void clearAllEnemies() {
-    for (final e in [...aliveEnemies]) {
-      e.removeFromParent();
+    if (hit.isCritical) {
+      _spawnFloating('💥 크리티컬!', const Color(0xFFFFD86E), 22);
+    } else if (hit.comboCount >= 3) {
+      _spawnFloating('콤보 ×${hit.comboCount}', const Color(0xFFFFF4D6), 16);
     }
-    aliveEnemies.clear();
   }
 
-  // === 탭 이벤트 — 수동 발사 (선택적) ===
+  void _spawnChips(int count) {
+    final origin = vein.absolutePosition.clone();
+    final color = vein.ore.color;
+    for (int i = 0; i < count; i++) {
+      final angle = -math.pi / 2 +
+          (_rng.nextDouble() * 2 - 1) * (math.pi / 3);
+      final speed = 80 + _rng.nextDouble() * 80;
+      add(OreChip(
+        origin: origin,
+        color: color,
+        angle: angle,
+        speed: speed,
+      ));
+    }
+  }
+
+  void _spawnFloating(String text, Color color, double size) {
+    final origin = vein.absolutePosition + Vector2(0, -40);
+    add(FloatingText(
+      origin: origin,
+      text: text,
+      color: color,
+      fontSize: size,
+    ));
+  }
+
+  // === 탭 이벤트 — 수동 곡괭이질 ===
 
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
-    // 탭 위치 근처 적이 있으면 강한 광물 즉시 발사
-    final pos = event.canvasPosition;
-    final closest = _nearestTo(pos);
-    if (closest == null) return;
-    // 강력한 발사체 — provider 한 번만 사용 (간단 처리)
-    providerRef();
-    // 시각적 곡괭이 휘두름
-    byeori.swing();
-    closest.takeDamage(currentDamage * 1.6);
-  }
-
-  EnemyComponent? _nearestTo(Vector2 pos) {
-    EnemyComponent? best;
-    double bestD = double.infinity;
-    for (final e in aliveEnemies) {
-      final d = (e.absolutePosition - pos).length2;
-      if (d < bestD) {
-        bestD = d;
-        best = e;
-      }
-    }
-    if (best == null) return null;
-    if (math.sqrt(bestD) > 90) return null;
-    return best;
+    providerRef().tap();
   }
 }

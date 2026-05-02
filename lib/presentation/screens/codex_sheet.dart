@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
-import '../../data/balance/enemy_data.dart';
+import '../../core/utils/big_number.dart';
+import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
-import '../../data/models/enemy_type.dart';
 import '../providers/game_provider.dart';
 
 class CodexSheet extends ConsumerStatefulWidget {
@@ -16,7 +16,7 @@ class CodexSheet extends ConsumerStatefulWidget {
 
 class _CodexSheetState extends ConsumerState<CodexSheet>
     with SingleTickerProviderStateMixin {
-  late final TabController _tab = TabController(length: 3, vsync: this);
+  late final TabController _tab = TabController(length: 2, vsync: this);
 
   @override
   Widget build(BuildContext context) {
@@ -43,9 +43,8 @@ class _CodexSheetState extends ConsumerState<CodexSheet>
                 labelColor: AppColors.gold,
                 unselectedLabelColor: AppColors.textSecondary,
                 tabs: const [
-                  Tab(text: '광물'),
-                  Tab(text: '손님 / 침입자'),
-                  Tab(text: '보스'),
+                  Tab(text: '광석 도감'),
+                  Tab(text: '조수'),
                 ],
               ),
               Expanded(
@@ -53,8 +52,7 @@ class _CodexSheetState extends ConsumerState<CodexSheet>
                   controller: _tab,
                   children: [
                     _OreList(state: state, controller: controller),
-                    _EnemyList(state: state, controller: controller),
-                    _BossList(state: state, controller: controller),
+                    _HelperList(state: state, controller: controller),
                   ],
                 ),
               ),
@@ -79,60 +77,25 @@ class _OreList extends StatelessWidget {
       itemCount: kOres.length,
       itemBuilder: (context, i) {
         final ore = kOres[i];
-        final unlocked = state.day >= ore.unlockDay;
+        final discovered = state.discoveredOres.contains(ore.id);
         return _CodexCard(
           color: ore.color,
           tierLabel: ore.tier.label,
           tierColor: ore.tier.color,
-          name: ore.name,
-          subtitle: unlocked
-              ? '${ore.description}\n공격력 ×${ore.damageMul.toStringAsFixed(1)}'
-              : 'DAY ${ore.unlockDay} 부터 해금',
+          name: discovered ? ore.name : '???',
+          subtitle: discovered
+              ? '${ore.description}\n1개당 ${BigNumberFormat.format(ore.coinValue)} 코인'
+              : '광맥을 더 강화해 발견하세요',
           emoji: ore.emoji,
-          unlocked: unlocked,
+          unlocked: discovered,
         );
       },
     );
   }
 }
 
-class _EnemyList extends StatelessWidget {
-  const _EnemyList({required this.state, required this.controller});
-  final dynamic state;
-  final ScrollController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final all = kEnemies;
-    return ListView.builder(
-      controller: controller,
-      padding: const EdgeInsets.all(16),
-      itemCount: all.length,
-      itemBuilder: (context, i) {
-        final e = all[i];
-        return _CodexCard(
-          color: e.kind == EnemyKind.customer
-              ? AppColors.customerAura
-              : AppColors.intruderAura,
-          tierLabel:
-              e.kind == EnemyKind.customer ? '손님' : '침입자',
-          tierColor: e.kind == EnemyKind.customer
-              ? AppColors.gold
-              : AppColors.tierEpic,
-          name: e.name,
-          subtitle: e.kind == EnemyKind.customer
-              ? '광산에 도달하기 전에 광물을 건네주면 보상! 도달해도 손해는 없음.'
-              : '광산에 도달하면 광물 약탈 + 광산 체력 -1.',
-          emoji: e.emoji,
-          unlocked: true,
-        );
-      },
-    );
-  }
-}
-
-class _BossList extends StatelessWidget {
-  const _BossList({required this.state, required this.controller});
+class _HelperList extends StatelessWidget {
+  const _HelperList({required this.state, required this.controller});
   final dynamic state;
   final ScrollController controller;
 
@@ -141,18 +104,19 @@ class _BossList extends StatelessWidget {
     return ListView.builder(
       controller: controller,
       padding: const EdgeInsets.all(16),
-      itemCount: kBosses.length,
+      itemCount: kHelpers.length,
       itemBuilder: (context, i) {
-        final b = kBosses[i];
+        final h = kHelpers[i];
+        final cur = state.helpers[h.id];
+        final recruited = cur?.recruited ?? false;
         return _CodexCard(
-          color: const Color(0xFFFF6B5C),
-          tierLabel: '보스',
-          tierColor: AppColors.tierLegendary,
-          name: b.name,
-          subtitle: '체력 ×${b.hpMul.toStringAsFixed(0)}, '
-              '코인 ×${b.coinMul.toStringAsFixed(0)}',
-          emoji: b.emoji,
-          unlocked: true,
+          color: h.color,
+          tierLabel: h.tier.label,
+          tierColor: h.tier.color,
+          name: recruited ? '${h.name} (Lv.${cur.level})' : h.name,
+          subtitle: h.description,
+          emoji: h.emoji,
+          unlocked: recruited,
         );
       },
     );
@@ -221,10 +185,13 @@ class _CodexCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 15),
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     Container(
