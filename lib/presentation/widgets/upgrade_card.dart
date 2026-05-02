@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/big_number.dart';
 
-/// 일괄 구매 카드 — 모든 강화 화면에서 공통으로 쓰임.
+/// 강화 카드 — sw_clicker `UpgradeTile` 스타일 가로형.
 ///
-/// 다음 정보를 한 카드에 모두 노출한다:
-/// - 현재 효과 ([subtitle])
-/// - 다음 +1 단위 비용/효과 ([nextStepCost] + [nextStepGain]) — 항상 표시
-/// - 일괄 모드 합계 ([bulkTimes] + [bulkTotalCost]) — 모드가 ×1이 아닐 때
-/// - 버튼: 실제 구매 가능한 횟수 + 합계 비용
+/// 한 행 구조:
+///   [아이콘 박스] [이름+레벨뱃지 / 부제 / 다음효과 pill] [구매 버튼]
+///
+/// 구매 버튼은 코인 부족이어도 비용을 그대로 표시하고 회색으로
+/// 비활성화될 뿐, "코인 부족" 같은 라벨은 사용하지 않는다.
 class UpgradeCard extends StatelessWidget {
   const UpgradeCard({
     super.key,
@@ -17,13 +17,11 @@ class UpgradeCard extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.subtitle,
+    required this.gainPill,
     required this.levelBadge,
-    required this.nextStepCost,
-    required this.nextStepGain,
-    required this.bulkTimes,
-    required this.bulkTotalCost,
-    required this.buttonLabel,
-    required this.enabled,
+    required this.buyCount,
+    required this.totalCost,
+    required this.affordable,
     required this.onTap,
     this.emoji,
     this.atMax = false,
@@ -31,307 +29,263 @@ class UpgradeCard extends StatelessWidget {
     this.costIcon = Icons.monetization_on_outlined,
   });
 
-  /// 제목
   final String title;
   final IconData icon;
   final Color iconColor;
   final String? emoji;
 
-  /// 현재 효과 (예: "광석/초 1.2K", "탭당 +500", "데미지 ×7")
+  /// 현재 효과/상태 한 줄 (예: "곡괭이질 1번에 광석 8개")
   final String subtitle;
 
-  /// "Lv.12" 또는 "12/50" 같은 레벨 배지 텍스트
+  /// 다음 +1 효과 — pill 형태로 표시 (예: "다음 +1 → 11개")
+  final String gainPill;
+
+  /// "Lv.5" / "5/50" / "미영입" 같은 레벨 뱃지
   final String levelBadge;
 
-  /// 다음 +1 비용 — 항상 표시 (살 수 없어도). 최대 레벨이면 null.
-  final double? nextStepCost;
+  /// 현재 모드의 구매 횟수 (×1 모드면 1, ×10이면 10 등)
+  final int buyCount;
 
-  /// 다음 +1 효과 한 줄 (예: "→ 광석/초 1.5K"). 없으면 null.
-  final String? nextStepGain;
+  /// 현재 모드의 합계 비용 — 살 수 없어도 그대로 표시. 최대 도달이면 null.
+  final double? totalCost;
 
-  /// 일괄 모드에서 살 수 있는 횟수. ×1이거나 buyable이 1이면 1.
-  final int bulkTimes;
+  /// 살 수 있는가
+  final bool affordable;
 
-  /// 일괄 합계 비용 — bulkTimes ≥ 2일 때만 별도 표시.
-  final double? bulkTotalCost;
-
-  /// "강화" / "영입" / "최대" 같은 버튼 라벨
-  final String buttonLabel;
-
-  /// 버튼 활성 여부
-  final bool enabled;
   final VoidCallback onTap;
 
-  /// 최대 레벨에 도달했는가
+  /// 최대 레벨 도달 여부 — 버튼이 "최대"로 바뀜
   final bool atMax;
 
-  /// 비용 표시 색상 — 환생 트리는 별의 결정(노랑), 그 외 코인(노랑) 동일
+  /// 환생 트리는 별 아이콘
   final Color costColor;
   final IconData costIcon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.cardBackgroundLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: enabled
+          color: affordable && !atMax
               ? iconColor.withValues(alpha: 0.6)
               : AppColors.dividerColor,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(10),
+      child: Row(
         children: [
-          _header(),
-          const SizedBox(height: 8),
-          _infoBox(),
-          const SizedBox(height: 10),
-          _button(),
-        ],
-      ),
-    );
-  }
-
-  Widget _header() {
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(11),
+          // 좌: 아이콘
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: emoji != null
+                ? Text(emoji!, style: const TextStyle(fontSize: 26))
+                : Icon(icon, color: iconColor, size: 24),
           ),
-          alignment: Alignment.center,
-          child: emoji != null
-              ? Text(emoji!, style: const TextStyle(fontSize: 24))
-              : Icon(icon, color: iconColor, size: 22),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.gold.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      levelBadge,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.gold,
-                        fontWeight: FontWeight.w800,
+          const SizedBox(width: 10),
+          // 가운데: 이름 / 부제 / 다음 효과 pill
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.starlightCream,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 회색 박스 — 다음 +1 비용/효과 + (있으면) ×N 일괄 합계
-  Widget _infoBox() {
-    if (atMax) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.dividerColor),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.check_circle_outline,
-                size: 14, color: AppColors.gold),
-            SizedBox(width: 6),
-            Text(
-              '최대 레벨에 도달했습니다',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.gold,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final showBulk = bulkTimes > 1 && bulkTotalCost != null;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 다음 +1 라인 (항상)
-          Row(
-            children: [
-              const SizedBox(
-                width: 56,
-                child: Text(
-                  '다음 +1',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (nextStepCost != null) ...[
-                Icon(costIcon, color: costColor, size: 12),
-                const SizedBox(width: 2),
-                Text(
-                  BigNumberFormat.format(nextStepCost!),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: costColor,
-                  ),
-                ),
-              ] else
-                const Text(
-                  '-',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              if (nextStepGain != null) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    nextStepGain!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.starlightCream,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: iconColor.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        levelBadge,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: iconColor,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
                 ),
-              ],
-            ],
-          ),
-          // ×N 합계 라인 (일괄 모드일 때만)
-          if (showBulk) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                SizedBox(
-                  width: 56,
-                  child: Text(
-                    '×$bulkTimes 합계',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Icon(costIcon, color: costColor, size: 12),
-                const SizedBox(width: 2),
+                const SizedBox(height: 2),
                 Text(
-                  BigNumberFormat.format(bulkTotalCost!),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: costColor,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '($bulkTimes 레벨 강화)',
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.textSecondary,
                   ),
                 ),
+                const SizedBox(height: 5),
+                _GainPill(label: gainPill, color: iconColor),
               ],
             ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _button() {
-    final hasAffordable = bulkTimes > 0 && bulkTotalCost != null;
-    final showCount = hasAffordable && bulkTimes > 1;
-    final label = atMax
-        ? '최대'
-        : (hasAffordable
-            ? (showCount ? '$buttonLabel ×$bulkTimes' : buttonLabel)
-            : '코인 부족');
-
-    return ElevatedButton(
-      onPressed: enabled ? onTap : null,
-      style: ElevatedButton.styleFrom(
-        backgroundColor:
-            enabled ? iconColor : AppColors.dividerColor,
-        minimumSize: const Size(double.infinity, 38),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w800),
           ),
-          if (hasAffordable && bulkTotalCost != null) ...[
-            const SizedBox(width: 8),
-            Icon(costIcon, size: 13, color: Colors.white),
-            const SizedBox(width: 2),
-            Text(
-              BigNumberFormat.format(bulkTotalCost!),
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ],
+          const SizedBox(width: 8),
+          // 우: 구매 버튼
+          _BuyButton(
+            buyCount: buyCount,
+            totalCost: totalCost,
+            affordable: affordable,
+            atMax: atMax,
+            costColor: costColor,
+            costIcon: costIcon,
+            iconColor: iconColor,
+            onTap: onTap,
+          ),
         ],
       ),
     );
   }
 }
 
-/// 시트 상단 핸들 (예전 모달 시트 잔재 — 인벤토리 시트만 사용)
+class _GainPill extends StatelessWidget {
+  const _GainPill({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _BuyButton extends StatelessWidget {
+  const _BuyButton({
+    required this.buyCount,
+    required this.totalCost,
+    required this.affordable,
+    required this.atMax,
+    required this.costColor,
+    required this.costIcon,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final int buyCount;
+  final double? totalCost;
+  final bool affordable;
+  final bool atMax;
+  final Color costColor;
+  final IconData costIcon;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // 색상 결정
+    final Color bg;
+    final Color fg;
+    if (atMax) {
+      bg = AppColors.dividerColor;
+      fg = AppColors.textSecondary;
+    } else if (affordable) {
+      bg = iconColor;
+      fg = Colors.white;
+    } else {
+      // 살 수 없을 때 — 회색이지만 텍스트는 그대로 보임
+      bg = AppColors.dividerColor;
+      fg = AppColors.textSecondary;
+    }
+
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: (!atMax && affordable) ? onTap : null,
+        child: Container(
+          width: 92,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                atMax ? '최대' : '×$buyCount',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              if (!atMax && totalCost != null)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(costIcon,
+                        color: affordable ? fg : costColor, size: 14),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        BigNumberFormat.format(totalCost!),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: affordable ? fg : costColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const Text(
+                  '-',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SheetHandle extends StatelessWidget {
   const SheetHandle({super.key});
   @override

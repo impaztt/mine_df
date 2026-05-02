@@ -428,6 +428,66 @@ class GameProvider extends ChangeNotifier {
     );
   }
 
+  /// UI 표시 전용 — 현재 [bulkMode]의 buyCount와 합계 비용을
+  /// **살 수 없어도** 그대로 반환한다 (sw_clicker 스타일).
+  ///
+  /// - ×1: buyCount = 1, totalCost = 다음 +1 비용
+  /// - ×10/×100: buyCount = mode 숫자, totalCost = 그 횟수 합계 (cap에 막히면 그만큼만)
+  /// - MAX: 코인이 닿는 만큼; 못 사면 buyCount=1로 fallback (다음 +1 비용 표시)
+  ({int buyCount, double totalCost, bool affordable, bool atCap})
+      priceForMode({
+    required int currentLevel,
+    required int? cap,
+    required double Function(int level) costFn,
+  }) {
+    final capLeft = cap != null
+        ? (cap - currentLevel).clamp(0, 9999)
+        : 9999;
+    if (capLeft == 0) {
+      return (
+        buyCount: 0,
+        totalCost: 0,
+        affordable: false,
+        atCap: true,
+      );
+    }
+
+    final mode = _bulkMode;
+    if (mode == BulkBuyMode.max) {
+      int t = 0;
+      double total = 0;
+      while (t < capLeft) {
+        final next = costFn(currentLevel + t);
+        if (total + next > _state.coin) break;
+        total += next;
+        t++;
+        if (t > 9999) break;
+      }
+      if (t == 0) {
+        // 살 수 없으면 ×1처럼 표시 — 다음 +1 비용
+        return (
+          buyCount: 1,
+          totalCost: costFn(currentLevel),
+          affordable: false,
+          atCap: false,
+        );
+      }
+      return (buyCount: t, totalCost: total, affordable: true, atCap: false);
+    }
+
+    final target = mode.count.clamp(1, capLeft);
+    double total = 0;
+    for (int i = 0; i < target; i++) {
+      total += costFn(currentLevel + i);
+    }
+    return (
+      buyCount: target,
+      totalCost: total,
+      affordable: _state.coin >= total,
+      atCap: false,
+    );
+  }
+
   int _bulkRequested() => _bulkMode.count;
 
   // === 곡괭이 강화 (기존) ===

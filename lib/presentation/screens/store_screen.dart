@@ -274,53 +274,42 @@ class _HelperTab extends ConsumerWidget {
         final level = cur?.level ?? 0;
 
         if (!recruited) {
-          // 영입 단계 — bulk는 의미 없음, ×1만
+          // 영입은 단발 — buyCount=1
           final canBuy = state.coin >= def.recruitCost;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: UpgradeCard(
-              title: def.name,
-              icon: Icons.pets,
-              iconColor: def.tier.color,
-              emoji: def.emoji,
-              subtitle: def.description,
-              levelBadge: '미영입',
-              nextStepCost: def.recruitCost,
-              nextStepGain: '영입 시 Lv.1 시작',
-              bulkTimes: canBuy ? 1 : 1,
-              bulkTotalCost: canBuy ? def.recruitCost : null,
-              buttonLabel: '영입',
-              enabled: canBuy,
-              onTap: () => _snack(
-                  context, game.recruitOrUpgradeHelper(def.id)),
-            ),
-          );
-        }
-
-        final nextCost = helperUpgradeCost(def, level);
-        final plan = game.previewBulk(
-          currentLevel: level,
-          cap: null,
-          costFn: (lv) => helperUpgradeCost(def, lv),
-        );
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: UpgradeCard(
+          return UpgradeCard(
             title: def.name,
             icon: Icons.pets,
             iconColor: def.tier.color,
             emoji: def.emoji,
             subtitle: def.description,
-            levelBadge: 'Lv.$level',
-            nextStepCost: nextCost,
-            nextStepGain: '→ Lv.${level + 1}',
-            bulkTimes: plan.times == 0 ? 1 : plan.times,
-            bulkTotalCost: plan.times > 0 ? plan.cost : null,
-            buttonLabel: '강화',
-            enabled: plan.times > 0,
+            gainPill: '영입 → Lv.1',
+            levelBadge: '미영입',
+            buyCount: 1,
+            totalCost: def.recruitCost,
+            affordable: canBuy,
             onTap: () =>
                 _snack(context, game.recruitOrUpgradeHelper(def.id)),
-          ),
+          );
+        }
+
+        final price = game.priceForMode(
+          currentLevel: level,
+          cap: null,
+          costFn: (lv) => helperUpgradeCost(def, lv),
+        );
+        return UpgradeCard(
+          title: def.name,
+          icon: Icons.pets,
+          iconColor: def.tier.color,
+          emoji: def.emoji,
+          subtitle: def.description,
+          gainPill: '+1 → Lv.${level + 1}',
+          levelBadge: 'Lv.$level',
+          buyCount: price.buyCount,
+          totalCost: price.totalCost,
+          affordable: price.affordable,
+          onTap: () =>
+              _snack(context, game.recruitOrUpgradeHelper(def.id)),
         );
       },
     );

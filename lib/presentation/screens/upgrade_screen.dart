@@ -160,35 +160,28 @@ class _TapTab extends ConsumerWidget {
         final def = kTapUpgrades[i];
         final lv = state.tapUpgrades[def.id] ?? 0;
 
-        // 항상 다음 +1 비용 (코인 없어도 보임)
-        final nextCost = TapUpgradeBalance.upgradeCost(def, lv);
         final addedNow = BigNumberFormat.format(lv * def.tapOrePerLevel);
         final addedNext =
             BigNumberFormat.format((lv + 1) * def.tapOrePerLevel);
 
-        // 일괄 구매 가능한 횟수와 합계 (코인 부족 시 0)
-        final plan = game.previewBulk(
+        final price = game.priceForMode(
           currentLevel: lv,
           cap: null,
           costFn: (l) => TapUpgradeBalance.upgradeCost(def, l),
         );
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: UpgradeCard(
-            title: def.name,
-            icon: def.icon,
-            iconColor: def.accent,
-            subtitle: '${def.description} (현재 +$addedNow)',
-            levelBadge: 'Lv.$lv',
-            nextStepCost: nextCost,
-            nextStepGain: '탭당 +$addedNext',
-            bulkTimes: plan.times == 0 ? 1 : plan.times,
-            bulkTotalCost: plan.times > 0 ? plan.cost : null,
-            buttonLabel: '강화',
-            enabled: plan.times > 0,
-            onTap: () => _snack(context, game.upgradeTap(def.id)),
-          ),
+        return UpgradeCard(
+          title: def.name,
+          icon: def.icon,
+          iconColor: def.accent,
+          subtitle: '${def.description} · 현재 +$addedNow',
+          gainPill: '+1 → 탭당 +$addedNext',
+          levelBadge: 'Lv.$lv',
+          buyCount: price.buyCount,
+          totalCost: price.totalCost,
+          affordable: price.affordable,
+          atMax: price.atCap,
+          onTap: () => _snack(context, game.upgradeTap(def.id)),
         );
       },
     );
@@ -211,39 +204,33 @@ class _CompanionTab extends ConsumerWidget {
         final def = kProducers[i];
         final lv = state.producers[def.id]?.level ?? 0;
 
-        final nextCost = ProducerBalance.upgradeCost(def, lv);
         final ops = ProducerBalance.orePerSec(def, lv);
         final nextOps = lv == 0
             ? def.baseOrePerSec
             : ProducerBalance.orePerSec(def, lv + 1);
 
-        final plan = game.previewBulk(
+        final price = game.priceForMode(
           currentLevel: lv,
           cap: null,
           costFn: (l) => ProducerBalance.upgradeCost(def, l),
         );
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: UpgradeCard(
-            title: def.name,
-            icon: def.icon,
-            iconColor: def.accent,
-            emoji: def.emoji,
-            subtitle: lv == 0
-                ? '미영입'
-                : '${BigNumberFormat.format(ops)} 광석/초',
-            levelBadge: lv == 0 ? '미영입' : 'Lv.$lv',
-            nextStepCost: nextCost,
-            nextStepGain: lv == 0
-                ? '영입 시 ${BigNumberFormat.format(def.baseOrePerSec)} 광석/초'
-                : '→ ${BigNumberFormat.format(nextOps)} 광석/초',
-            bulkTimes: plan.times == 0 ? 1 : plan.times,
-            bulkTotalCost: plan.times > 0 ? plan.cost : null,
-            buttonLabel: lv == 0 ? '영입' : '강화',
-            enabled: plan.times > 0,
-            onTap: () => _snack(context, game.upgradeProducer(def.id)),
-          ),
+        return UpgradeCard(
+          title: def.name,
+          icon: def.icon,
+          iconColor: def.accent,
+          emoji: def.emoji,
+          subtitle: lv == 0
+              ? '미영입 · 영입하면 ${BigNumberFormat.format(def.baseOrePerSec)}/초'
+              : '현재 ${BigNumberFormat.format(ops)} 광석/초',
+          gainPill: lv == 0
+              ? '영입 → ${BigNumberFormat.format(def.baseOrePerSec)}/초'
+              : '+1 → ${BigNumberFormat.format(nextOps)}/초',
+          levelBadge: lv == 0 ? '미영입' : 'Lv.$lv',
+          buyCount: price.buyCount,
+          totalCost: price.totalCost,
+          affordable: price.affordable,
+          onTap: () => _snack(context, game.upgradeProducer(def.id)),
         );
       },
     );
@@ -274,7 +261,7 @@ class _PickaxeTab extends ConsumerWidget {
           subtitleNow:
               '곡괭이질 1번에 광석 ${PickaxeBalance.orePerSwing(pickaxe)}개',
           gainNext:
-              '→ ${PickaxeBalance.orePerSwing(pickaxe.copyWith(damageLevel: pickaxe.damageLevel + 1))}개',
+              '+1 → ${PickaxeBalance.orePerSwing(pickaxe.copyWith(damageLevel: pickaxe.damageLevel + 1))}개',
           onUpgrade: () => game.upgradePickaxeDamage(),
         ),
         _row(
@@ -289,7 +276,7 @@ class _PickaxeTab extends ConsumerWidget {
           subtitleNow:
               '간격 ${PickaxeBalance.swingInterval(pickaxe).toStringAsFixed(2)}초',
           gainNext:
-              '→ ${PickaxeBalance.swingInterval(pickaxe.copyWith(speedLevel: pickaxe.speedLevel + 1)).toStringAsFixed(2)}초',
+              '+1 → ${PickaxeBalance.swingInterval(pickaxe.copyWith(speedLevel: pickaxe.speedLevel + 1)).toStringAsFixed(2)}초',
           onUpgrade: () => game.upgradePickaxeSpeed(),
         ),
         _row(
@@ -302,9 +289,9 @@ class _PickaxeTab extends ConsumerWidget {
           cap: PickaxeBalance.critChanceCap,
           costFn: PickaxeBalance.critChanceUpgradeCost,
           subtitleNow:
-              '현재 확률 ${game.currentCritChance.toStringAsFixed(1)}%',
+              '확률 ${game.currentCritChance.toStringAsFixed(1)}%',
           gainNext:
-              '→ +0.5%p (총 ${(game.currentCritChance + 0.5).toStringAsFixed(1)}%)',
+              '+1 → ${(game.currentCritChance + 0.5).toStringAsFixed(1)}%',
           onUpgrade: () => game.upgradeCritChance(),
         ),
         _row(
@@ -317,9 +304,9 @@ class _PickaxeTab extends ConsumerWidget {
           cap: PickaxeBalance.critPowerCap,
           costFn: PickaxeBalance.critPowerUpgradeCost,
           subtitleNow:
-              '크리티컬 시 ×${game.currentCritMultiplier.toStringAsFixed(1)}',
+              '크리 시 ×${game.currentCritMultiplier.toStringAsFixed(1)}',
           gainNext:
-              '→ ×${(game.currentCritMultiplier + 0.2).toStringAsFixed(1)}',
+              '+1 → ×${(game.currentCritMultiplier + 0.2).toStringAsFixed(1)}',
           onUpgrade: () => game.upgradeCritPower(),
         ),
         _row(
@@ -332,9 +319,9 @@ class _PickaxeTab extends ConsumerWidget {
           cap: PickaxeBalance.smeltCap,
           costFn: PickaxeBalance.smeltUpgradeCost,
           subtitleNow:
-              '환전 보너스 +${(game.currentSellBonus * 100).toStringAsFixed(0)}%',
+              '환전 +${(game.currentSellBonus * 100).toStringAsFixed(0)}%',
           gainNext:
-              '→ +${(game.currentSellBonus * 100 + 1).toStringAsFixed(0)}%',
+              '+1 → +${(game.currentSellBonus * 100 + 1).toStringAsFixed(0)}%',
           onUpgrade: () => game.upgradeSmelt(),
         ),
         _row(
@@ -349,7 +336,7 @@ class _PickaxeTab extends ConsumerWidget {
           subtitleNow:
               '확률 ${PickaxeBalance.chainMineProb(pickaxe.chainMineLevel).toStringAsFixed(1)}%',
           gainNext:
-              '→ ${PickaxeBalance.chainMineProb(pickaxe.chainMineLevel + 1).toStringAsFixed(1)}%',
+              '+1 → ${PickaxeBalance.chainMineProb(pickaxe.chainMineLevel + 1).toStringAsFixed(1)}%',
           onUpgrade: () => game.upgradeChainMine(),
         ),
         _row(
@@ -362,9 +349,9 @@ class _PickaxeTab extends ConsumerWidget {
           cap: PickaxeBalance.luckCap,
           costFn: PickaxeBalance.luckUpgradeCost,
           subtitleNow:
-              '신규 발견 시 보석 +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel)}',
+              '신규 발견 보석 +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel)}',
           gainNext:
-              '→ +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel + 1)}',
+              '+1 → +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel + 1)}',
           onUpgrade: () => game.upgradeLuck(),
         ),
       ],
@@ -384,30 +371,23 @@ class _PickaxeTab extends ConsumerWidget {
     required String gainNext,
     required ActionResult Function() onUpgrade,
   }) {
-    final atCap = cap != null && level >= cap;
-    final nextCost = atCap ? null : costFn(level);
-    final plan = game.previewBulk(
+    final price = game.priceForMode(
       currentLevel: level,
       cap: cap,
       costFn: costFn,
     );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: UpgradeCard(
-        title: title,
-        icon: icon,
-        iconColor: color,
-        subtitle: subtitleNow,
-        levelBadge: cap == null ? 'Lv.$level' : '$level/$cap',
-        atMax: atCap,
-        nextStepCost: nextCost,
-        nextStepGain: atCap ? null : gainNext,
-        bulkTimes: plan.times == 0 ? 1 : plan.times,
-        bulkTotalCost: plan.times > 0 ? plan.cost : null,
-        buttonLabel: '강화',
-        enabled: !atCap && plan.times > 0,
-        onTap: () => _snack(context, onUpgrade()),
-      ),
+    return UpgradeCard(
+      title: title,
+      icon: icon,
+      iconColor: color,
+      subtitle: subtitleNow,
+      gainPill: price.atCap ? '최대' : gainNext,
+      levelBadge: cap == null ? 'Lv.$level' : '$level/$cap',
+      atMax: price.atCap,
+      buyCount: price.buyCount,
+      totalCost: price.atCap ? null : price.totalCost,
+      affordable: price.affordable,
+      onTap: () => _snack(context, onUpgrade()),
     );
   }
 }

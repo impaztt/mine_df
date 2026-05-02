@@ -144,37 +144,31 @@ class PrestigeScreen extends ConsumerWidget {
           final costInt = cost.ceil();
           final canBuy = !atMax && state.stardust >= costInt;
 
-          // 환생 트리는 단발 — 다음 +1만 보여주고 일괄 합계는 항상 동일
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: UpgradeCard(
-              title: def.name,
-              icon: def.icon,
-              iconColor: def.accent,
-              subtitle:
-                  '${def.description}\n현재 보유 별의 결정: ${state.stardust}개',
-              levelBadge: atMax ? 'MAX' : 'Lv.$lv / ${def.maxLevel}',
-              atMax: atMax,
-              nextStepCost: atMax ? null : costInt.toDouble(),
-              nextStepGain: atMax ? null : '→ Lv.${lv + 1}',
-              bulkTimes: 1,
-              bulkTotalCost: null, // 단발 — 일괄 라인 생략
-              buttonLabel: '강화',
-              enabled: canBuy,
-              costColor: AppColors.gold,
-              costIcon: Icons.star,
-              onTap: () {
-                final r = game.upgradePrestigeNode(def.id);
-                if (!r.ok && r.message != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(r.message!),
-                      duration: const Duration(seconds: 1),
-                    ),
-                  );
-                }
-              },
-            ),
+          // 환생 트리는 단발 — 별의 결정으로 결제
+          return UpgradeCard(
+            title: def.name,
+            icon: def.icon,
+            iconColor: def.accent,
+            subtitle: def.description,
+            gainPill: atMax ? '최대 레벨' : '+1 → Lv.${lv + 1}',
+            levelBadge: atMax ? 'MAX' : '$lv/${def.maxLevel}',
+            atMax: atMax,
+            buyCount: atMax ? 0 : 1,
+            totalCost: atMax ? null : costInt.toDouble(),
+            affordable: canBuy,
+            costColor: AppColors.gold,
+            costIcon: Icons.star,
+            onTap: () {
+              final r = game.upgradePrestigeNode(def.id);
+              if (!r.ok && r.message != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(r.message!),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
           );
         }),
       ],
