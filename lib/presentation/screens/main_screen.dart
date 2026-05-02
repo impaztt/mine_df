@@ -6,13 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/big_number.dart';
 import '../../data/balance/ore_data.dart';
+import '../../data/models/ore_type.dart';
 import '../game/starlit_mine_game.dart';
 import '../providers/game_provider.dart';
 import '../widgets/offline_reward_dialog.dart';
 import '../widgets/resource_chip.dart';
 import 'codex_sheet.dart';
 import 'helper_sheet.dart';
-import 'ore_inventory_sheet.dart';
+import 'inventory_sheet.dart';
 import 'pickaxe_sheet.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -218,24 +219,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
         child: Column(
           children: [
-            Row(
-              children: [
-                _resourceTile(
-                  Icons.monetization_on_outlined,
-                  '코인',
-                  BigNumberFormat.format(state.coin),
-                  AppColors.gold,
-                  subtitle: state.autoSell
-                      ? '+${BigNumberFormat.format(coinPerSec)}/s'
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                _autoSellToggle(game, state),
-              ],
-            ),
-            const SizedBox(height: 6),
-            // 광석 인벤토리 카드 (탭 → 시트, 모두팔기 버튼)
-            _inventoryCard(game),
+            // 통합 인벤토리 — 코인 + 광석 한 컨테이너에
+            _unifiedInventory(game, coinPerSec),
             const SizedBox(height: 8),
             // 현재 광석 라벨
             Container(
@@ -319,61 +304,135 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _resourceTile(
-    IconData icon,
-    String label,
-    String value,
-    Color color, {
-    String? subtitle,
-  }) {
-    return Expanded(
+  /// 코인 + 모든 보유 광석을 한 컨테이너에 표시.
+  /// 위쪽에 코인 + 자동환전 토글, 그 아래 가로 스크롤 광석 칩.
+  Widget _unifiedInventory(GameProvider game, double coinPerSec) {
+    final state = game.state;
+    final entries = state.oreInventory.entries
+        .where((e) => e.value > 0)
+        .toList();
+    // 광석 등급 순 정렬 (낮은 → 높은)
+    entries.sort((a, b) {
+      final ra = kOres.indexWhere((o) => o.id == a.key);
+      final rb = kOres.indexWhere((o) => o.id == b.key);
+      return ra.compareTo(rb);
+    });
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _open(const InventorySheet()),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: AppColors.cardBackgroundLight,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.4),
+          ),
         ),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 9,
+            // 헤더: 인벤토리 라벨 + 자동환전 토글
+            Row(
+              children: [
+                const Icon(
+                  Icons.inventory_2_outlined,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  '인벤토리',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                _autoSellToggleSmall(game, state),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 코인
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.monetization_on_outlined,
+                  color: AppColors.gold,
+                  size: 22,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  BigNumberFormat.format(state.coin),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.gold,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                if (state.autoSell)
+                  Text(
+                    '+${BigNumberFormat.format(coinPerSec)}/s',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.gold,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                const Spacer(),
+                if (entries.isNotEmpty)
+                  ElevatedButton(
+                    onPressed: () => game.sellAllInventory(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      minimumSize: const Size(0, 0),
+                    ),
+                    child: const Text(
+                      '모두팔기',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 광석 가로 스크롤
+            SizedBox(
+              height: 50,
+              child: entries.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '아직 캔 광석이 없어요. 곡괭이질로 모아보세요!',
+                        style: TextStyle(
+                          fontSize: 11,
                           color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (subtitle != null) ...[
-                        const SizedBox(width: 6),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: AppColors.gold,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: entries.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(width: 6),
+                      itemBuilder: (context, i) {
+                        final e = entries[i];
+                        final ore = kOres.firstWhere(
+                          (o) => o.id == e.key,
+                          orElse: () => kOres.first,
+                        );
+                        return _OreInventoryChip(
+                          ore: ore,
+                          count: e.value,
+                        );
+                      },
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -381,17 +440,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
     );
   }
 
-  Widget _autoSellToggle(GameProvider game, dynamic state) {
+  /// 작은 자동환전 토글 (인벤토리 헤더 안쪽).
+  Widget _autoSellToggleSmall(GameProvider game, dynamic state) {
     final unlocked = state.autoSellUnlocked as bool;
     final autoSell = state.autoSell as bool;
-
     final IconData icon;
     final Color color;
     final String label;
     if (!unlocked) {
       icon = Icons.lock;
       color = AppColors.tierEpic;
-      label = '잠금해제';
+      label = '자동환전 잠금해제';
     } else if (autoSell) {
       icon = Icons.toggle_on;
       color = AppColors.gold;
@@ -401,9 +460,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
       color = AppColors.textSecondary;
       label = '수집모드';
     }
-
     return InkWell(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       onTap: () {
         if (!unlocked) {
           _showAutoSellUnlockDialog(game);
@@ -420,25 +478,23 @@ class _MainScreenState extends ConsumerState<MainScreen>
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: autoSell
-              ? AppColors.gold.withValues(alpha: 0.18)
-              : (unlocked
-                  ? AppColors.cardBackgroundLight
-                  : AppColors.tierEpic.withValues(alpha: 0.10)),
-          borderRadius: BorderRadius.circular(10),
+              ? AppColors.gold.withValues(alpha: 0.15)
+              : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: color),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(height: 1),
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 color: color,
                 fontWeight: FontWeight.w800,
               ),
@@ -535,105 +591,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
             child: const Text('잠금 해제'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _inventoryCard(GameProvider game) {
-    final kinds = game.inventoryKindCount();
-    final totalCount = game.inventoryTotalCount();
-    final value = game.inventoryTotalValue();
-    final empty = kinds == 0;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => _open(const OreInventorySheet()),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.cardBackgroundLight,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: empty
-                ? AppColors.dividerColor
-                : AppColors.crystalTeal.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.inventory_2_outlined,
-              color: AppColors.crystalTeal,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        '광석 인벤토리',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        empty
-                            ? '비어있음'
-                            : '$kinds종 · ${BigNumberFormat.format(totalCount)}개',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: empty
-                              ? AppColors.textSecondary
-                              : AppColors.crystalTeal,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    empty
-                        ? '곡괭이질로 광석을 모아보세요'
-                        : '팔면 ${BigNumberFormat.format(value)} 코인',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: empty
-                          ? AppColors.textSecondary
-                          : AppColors.starlightCream,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!empty)
-              ElevatedButton(
-                onPressed: () => game.sellAllInventory(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.gold,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  minimumSize: const Size(0, 0),
-                ),
-                child: const Text(
-                  '모두팔기',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              )
-            else
-              const Icon(Icons.chevron_right,
-                  color: AppColors.textSecondary, size: 20),
-          ],
-        ),
       ),
     );
   }
@@ -750,3 +707,50 @@ class _SpiritBadge extends StatelessWidget {
   }
 }
 
+/// 인벤토리 가로 스크롤에서 한 칸 — 이모지 + 광석 색 테두리 + 개수
+class _OreInventoryChip extends StatelessWidget {
+  const _OreInventoryChip({required this.ore, required this.count});
+  final OreDef ore;
+  final double count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: ore.color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ore.color.withValues(alpha: 0.55)),
+      ),
+      child: Row(
+        children: [
+          Text(ore.emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 6),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                ore.name,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                '×${BigNumberFormat.format(count)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: ore.color,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
