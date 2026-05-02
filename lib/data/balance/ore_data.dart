@@ -299,24 +299,23 @@ OreDef oreByRank(int rank) {
 
 /// 광맥 등급 업그레이드 비용.
 ///
-/// 30등급에 약 4주 도달 목표로, 등급이 올라갈수록 multiplier 자체가
-/// 곱해지는 곡선:
-///   비용 = 다음 광석 가치 × (1500 × 1.10^(currentRank - 1))
+/// 30등급 ~4주 도달 목표. 시작부터 의미 있게 비싸도록 multiplier를
+/// 50K에서 시작해 매 등급마다 +6%씩 가팔라지는 곡선:
+///   비용 = 다음 광석 가치 × (50000 × 1.06^(currentRank - 1))
 ///
-/// - 1등급(거친 돌→구리): 1500 × 1.0    = ×1.5K  (튜토리얼)
-/// - 5등급(금→수정):       1500 × 1.46  = ×2.2K
-/// - 15등급:               1500 × 3.80  = ×5.7K
-/// - 30등급(우주→별핵):    1500 × 16.05 = ×24K
+/// - 1등급(거친 돌→구리, 1→5):     5 × 50K       = 250K
+/// - 5등급(금→수정, 600→3K):       3K × 63K      = 189M
+/// - 15등급(별빛 결정→그림자석):    1.9e13 × 113K = 2.1e18
+/// - 30등급(우주의 광석→별의 핵):   2e20 × 269K   = 5.4e25
 ///
-/// 광석 가치 자체도 등급당 ×5씩 자라기 때문에 후반 등급으로 갈수록
-/// 한 등급 강화에 필요한 시간이 거의 두 배씩 늘어나는 구조.
+/// 광석 가치 자체도 등급당 ×5씩 자라므로 누적 곡선은 매우 가파름.
+/// 광부와 탭 강화의 누적 광석/초가 따라잡지 못하면 자연스러운 벽이 생김.
 double mineUpgradeCost(int currentRank) {
   if (currentRank >= kOres.length) return double.infinity;
   final nextValue = oreByRank(currentRank + 1).coinValue;
-  // 1.10^(currentRank-1) — 매 등급마다 +10% 가파라짐
-  double multiplier = 1500;
+  double multiplier = 50000;
   for (int i = 1; i < currentRank; i++) {
-    multiplier *= 1.10;
+    multiplier *= 1.06;
   }
   return nextValue * multiplier;
 }

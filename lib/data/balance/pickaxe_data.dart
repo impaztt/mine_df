@@ -2,11 +2,12 @@ import '../models/pickaxe.dart';
 
 /// 곡괭이 시스템 밸런싱.
 ///
-/// 30등급 4주 도달을 위해 전체적으로 비용 인상 + 성장 둔화:
-/// - 곡괭이 데미지 성장 ×1.32 → ×1.20 (한 번에 캐는 광석 천천히)
-/// - 곡괭이 데미지 비용 50 → 120, 곡선 ×1.25 → ×1.30
-/// - 곡괭이 속도 비용 200 → 600, 곡선 ×1.35 → ×1.42
-/// - 7개 항목의 비용 곡선 모두 가파르게
+/// 곡괭이는 광맥/광부/탭 강화 셋의 비용을 모두 합한 것보다도 비싼,
+/// 의도적으로 "후반에 한두 개 사는" 사치재로 설계됨.
+///
+/// - 곡괭이 데미지 시작 5K, 곡선 ×1.32
+/// - 곡괭이 속도 시작 25K, 곡선 ×1.45
+/// - 7개 항목 모두 시작 비용 ×30~50배 인상
 class PickaxeBalance {
   PickaxeBalance._();
 
@@ -25,13 +26,12 @@ class PickaxeBalance {
   }
 
   static double damageUpgradeCost(int currentLevel) {
-    return 120 * _pow(1.30, currentLevel);
+    return 5000 * _pow(1.32, currentLevel);
   }
 
   // ===== 곡괭이 속도 (간격, 초) =====
 
-  /// Lv1=1.0초, 매 레벨 ×0.95, 하한 0.20초.
-  /// 매 레벨 -5%로 둔화 (이전 -7%)
+  /// Lv1=1.0초, 매 레벨 ×0.95, 하한 0.20초
   static double swingInterval(PickaxeStats s) {
     double t = 1.0;
     for (int i = 1; i < s.speedLevel; i++) {
@@ -41,7 +41,7 @@ class PickaxeBalance {
   }
 
   static double speedUpgradeCost(int currentLevel) {
-    return 600 * _pow(1.42, currentLevel);
+    return 25000 * _pow(1.45, currentLevel);
   }
 
   static int get speedSoftCap => 35;
@@ -52,7 +52,7 @@ class PickaxeBalance {
   static double critChanceBonus(int level) => 0.5 * level;
 
   static double critChanceUpgradeCost(int currentLevel) {
-    return 2500 * _pow(1.35, currentLevel);
+    return 100000 * _pow(1.40, currentLevel);
   }
 
   // ===== 크리티컬 위력 강화 (Lv당 +0.2배) =====
@@ -61,7 +61,7 @@ class PickaxeBalance {
   static double critPowerBonus(int level) => 0.2 * level;
 
   static double critPowerUpgradeCost(int currentLevel) {
-    return 12000 * _pow(1.45, currentLevel);
+    return 500000 * _pow(1.50, currentLevel);
   }
 
   // ===== 광석 제련 (환전 시 코인 +%) =====
@@ -70,7 +70,7 @@ class PickaxeBalance {
   static double smeltBonus(int level) => 0.01 * level;
 
   static double smeltUpgradeCost(int currentLevel) {
-    return 2000 * _pow(1.32, currentLevel);
+    return 80000 * _pow(1.36, currentLevel);
   }
 
   // ===== 연쇄 채굴 (Lv당 +0.5% 확률, 캡 25%) =====
@@ -79,7 +79,7 @@ class PickaxeBalance {
   static double chainMineProb(int level) => 0.5 * level;
 
   static double chainMineUpgradeCost(int currentLevel) {
-    return 8000 * _pow(1.50, currentLevel);
+    return 300000 * _pow(1.55, currentLevel);
   }
 
   static int get chainMineMaxDepth => 5;
@@ -90,7 +90,7 @@ class PickaxeBalance {
   static int luckGemBonus(int level) => level;
 
   static double luckUpgradeCost(int currentLevel) {
-    return 5000 * _pow(1.55, currentLevel);
+    return 200000 * _pow(1.60, currentLevel);
   }
 }
 
