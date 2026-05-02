@@ -405,7 +405,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
             const SizedBox(height: 6),
             // 광석 가로 스크롤
             SizedBox(
-              height: 50,
+              height: 64,
               child: entries.isEmpty
                   ? const Center(
                       child: Text(
@@ -430,6 +430,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         return _OreInventoryChip(
                           ore: ore,
                           count: e.value,
+                          sellBonus: game.currentSellBonus,
                         );
                       },
                     ),
@@ -707,14 +708,20 @@ class _SpiritBadge extends StatelessWidget {
   }
 }
 
-/// 인벤토리 가로 스크롤에서 한 칸 — 이모지 + 광석 색 테두리 + 개수
+/// 인벤토리 가로 스크롤에서 한 칸 — 이모지 / 광석명 / 보유 개수 / 팔면 받을 코인
 class _OreInventoryChip extends StatelessWidget {
-  const _OreInventoryChip({required this.ore, required this.count});
+  const _OreInventoryChip({
+    required this.ore,
+    required this.count,
+    required this.sellBonus,
+  });
   final OreDef ore;
   final double count;
+  final double sellBonus;
 
   @override
   Widget build(BuildContext context) {
+    final coin = count * ore.coinValue * (1 + sellBonus);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
@@ -724,7 +731,7 @@ class _OreInventoryChip extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(ore.emoji, style: const TextStyle(fontSize: 18)),
+          Text(ore.emoji, style: const TextStyle(fontSize: 20)),
           const SizedBox(width: 6),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -746,6 +753,25 @@ class _OreInventoryChip extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   color: ore.color,
                 ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.monetization_on_outlined,
+                    size: 10,
+                    color: AppColors.gold,
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    BigNumberFormat.format(coin),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.gold,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
