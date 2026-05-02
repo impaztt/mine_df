@@ -57,6 +57,6 @@ class IdleCalculator {
   static double _sellBonus(GameState state) {
     final dali = state.helpers['rabbit_dali'];
     if (dali == null || !dali.recruited) return 0;
-    return 0.06 * dali.level;
+    return 0.04 * dali.level;
   }
 }

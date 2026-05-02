@@ -297,11 +297,15 @@ OreDef oreByRank(int rank) {
   return kOres[idx];
 }
 
-/// 광맥 등급 업그레이드 비용 — 다음 등급 광석 가치의 `multiplier`배.
+/// 광맥 등급 업그레이드 비용 — 다음 등급 광석을 약 250개 모은 가치.
+///
+/// 다음 광석 1개 가치는 보통 현재 광석의 4.5배쯤이라, 이 비용은
+/// "다음 광석을 250개 캐서 팔아야 가능"한 수준. 여기에 곡괭이 데미지
+/// 강화도 함께 필요하므로 광맥 강화는 큰 도약 이벤트로 작용한다.
 double mineUpgradeCost(int currentRank) {
   if (currentRank >= kOres.length) return double.infinity;
   final nextValue = oreByRank(currentRank + 1).coinValue;
-  return nextValue * 80; // 다음 광석 80개를 캐낼 정도의 코인
+  return nextValue * 250;
 }
 
 /// 최대 광맥 등급

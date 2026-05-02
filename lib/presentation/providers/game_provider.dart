@@ -36,6 +36,10 @@ class MineHit {
   final bool isCritical;
   final double coinGained;
 
+  /// 이번 곡괭이질로 처음 캐낸 광석이면 그 광석 ID. 아니면 null.
+  /// (보석 보너스 알림용)
+  final String? newlyDiscoveredOreId;
+
   /// 매 채굴마다 새 인스턴스를 만들기 위한 식별자
   final int seq;
 
@@ -44,6 +48,7 @@ class MineHit {
     required this.isCritical,
     required this.coinGained,
     required this.seq,
+    this.newlyDiscoveredOreId,
   });
 }
 
@@ -184,7 +189,7 @@ class GameProvider extends ChangeNotifier {
     // 구미호 — 일정 확률로 ×2
     final gumiho = _state.helpers['gumiho_yawol'];
     if (gumiho != null && gumiho.recruited) {
-      final p = 0.015 * gumiho.level * 100; // 백분율
+      final p = 1.2 * gumiho.level; // 퍼센트 단위
       if (_rng.nextDouble() * 100 < p) {
         amount *= 2;
       }
@@ -196,13 +201,17 @@ class GameProvider extends ChangeNotifier {
     final coinGain =
         amount * ore.coinValue * (1 + sellBonus);
 
-    final newDiscovered = _state.discoveredOres.contains(ore.id)
-        ? _state.discoveredOres
-        : <String>{..._state.discoveredOres, ore.id};
+    // 신규 발견 처리 — 보석 보너스 + 도감 등록
+    final isNewDiscovery = !_state.discoveredOres.contains(ore.id);
+    final newDiscovered = isNewDiscovery
+        ? <String>{..._state.discoveredOres, ore.id}
+        : _state.discoveredOres;
+    final gemBonus = isNewDiscovery ? newOreDiscoveryGem : 0;
 
     if (_state.autoSell) {
       _state = _state.copyWith(
         coin: _state.coin + coinGain,
+        gem: _state.gem + gemBonus,
         totalSwings: _state.totalSwings + 1,
         discoveredOres: newDiscovered,
       );
@@ -211,6 +220,7 @@ class GameProvider extends ChangeNotifier {
       inv[ore.id] = (inv[ore.id] ?? 0) + amount;
       _state = _state.copyWith(
         oreInventory: inv,
+        gem: _state.gem + gemBonus,
         totalSwings: _state.totalSwings + 1,
         discoveredOres: newDiscovered,
       );
@@ -221,6 +231,7 @@ class GameProvider extends ChangeNotifier {
       isCritical: isCritical,
       coinGained: _state.autoSell ? coinGain : amount * ore.coinValue,
       seq: ++_hitSeq,
+      newlyDiscoveredOreId: isNewDiscovery ? ore.id : null,
     );
 
     notifyListeners();
@@ -256,7 +267,7 @@ class GameProvider extends ChangeNotifier {
     double c = GameConstants.baseCritChance;
     final chichi = _state.helpers['magpie_chichi'];
     if (chichi != null && chichi.recruited) {
-      c += chichi.level.toDouble();
+      c += 0.8 * chichi.level;
     }
     return c.clamp(0, 80);
   }
@@ -264,7 +275,7 @@ class GameProvider extends ChangeNotifier {
   double _sellBonus() {
     final dali = _state.helpers['rabbit_dali'];
     if (dali == null || !dali.recruited) return 0;
-    return 0.06 * dali.level;
+    return 0.04 * dali.level;
   }
 
   final math.Random _rng = math.Random();
@@ -272,7 +283,10 @@ class GameProvider extends ChangeNotifier {
   // === 환전 / 자동매도 토글 ===
 
   /// 자동환전 잠금 해제 비용 (보석)
-  static const int autoSellUnlockGemCost = 100;
+  static const int autoSellUnlockGemCost = 50;
+
+  /// 광석 신규 발견 시 지급되는 보석 수
+  static const int newOreDiscoveryGem = 3;
 
   ActionResult unlockAutoSell() {
     if (_state.autoSellUnlocked) {
@@ -458,7 +472,7 @@ class GameProvider extends ChangeNotifier {
     final coinPerSec = IdleCalculator.coinPerSecond(_state);
     activeSpirit = SpiritBonus(
       id: 'spirit_${DateTime.now().millisecondsSinceEpoch}',
-      coinBonus: math.max(coinPerSec * 90.0, 100.0),
+      coinBonus: math.max(coinPerSec * GameConstants.spiritCoinSeconds, 50.0),
     );
     notifyListeners();
     Timer(const Duration(seconds: 15), () {

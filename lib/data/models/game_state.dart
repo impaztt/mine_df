@@ -63,9 +63,9 @@ class GameState {
   static GameState initial() {
     return GameState(
       oreInventory: const {},
-      coin: 30,
+      coin: 0,
       stardust: 0,
-      gem: 50,
+      gem: 5,
       mineRank: 1,
       pickaxe: const PickaxeStats(),
       helpers: const {},

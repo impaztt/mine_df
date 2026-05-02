@@ -134,6 +134,11 @@ class StarlitMineGame extends FlameGame with TapCallbacks {
           : AppColors.crystalTeal;
     }
     _spawnFloating(label, color, fontSize);
+
+    // 신규 광석 발견 시 보석 보상 알림
+    if (hit.newlyDiscoveredOreId != null) {
+      _spawnFloating('✨ 새 광석! 💎+3', AppColors.crystalTeal, 18);
+    }
   }
 
   void _spawnChips(int count) {
