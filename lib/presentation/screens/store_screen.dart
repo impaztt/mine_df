@@ -274,6 +274,8 @@ class _HelperTab extends ConsumerWidget {
         final level = cur?.level ?? 0;
 
         if (!recruited) {
+          // 영입 단계 — bulk는 의미 없음, ×1만
+          final canBuy = state.coin >= def.recruitCost;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: UpgradeCard(
@@ -282,18 +284,20 @@ class _HelperTab extends ConsumerWidget {
               iconColor: def.tier.color,
               emoji: def.emoji,
               subtitle: def.description,
-              hint: '한 번 영입하면 환생해도 유지됩니다 (레벨은 1로 초기화)',
               levelBadge: '미영입',
+              nextStepCost: def.recruitCost,
+              nextStepGain: '영입 시 Lv.1 시작',
+              bulkTimes: canBuy ? 1 : 1,
+              bulkTotalCost: canBuy ? def.recruitCost : null,
               buttonLabel: '영입',
-              buttonTimes: 1,
-              cost: def.recruitCost,
-              enabled: state.coin >= def.recruitCost,
+              enabled: canBuy,
               onTap: () => _snack(
                   context, game.recruitOrUpgradeHelper(def.id)),
             ),
           );
         }
 
+        final nextCost = helperUpgradeCost(def, level);
         final plan = game.previewBulk(
           currentLevel: level,
           cap: null,
@@ -307,11 +311,12 @@ class _HelperTab extends ConsumerWidget {
             iconColor: def.tier.color,
             emoji: def.emoji,
             subtitle: def.description,
-            hint: '레벨업 비용 ×1.25',
             levelBadge: 'Lv.$level',
+            nextStepCost: nextCost,
+            nextStepGain: '→ Lv.${level + 1}',
+            bulkTimes: plan.times == 0 ? 1 : plan.times,
+            bulkTotalCost: plan.times > 0 ? plan.cost : null,
             buttonLabel: '강화',
-            buttonTimes: plan.times,
-            cost: plan.times > 0 ? plan.cost : null,
             enabled: plan.times > 0,
             onTap: () =>
                 _snack(context, game.recruitOrUpgradeHelper(def.id)),

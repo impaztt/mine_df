@@ -10,8 +10,7 @@ import '../providers/game_provider.dart';
 import '../widgets/bulk_mode_bar.dart';
 import '../widgets/upgrade_card.dart';
 
-/// 강화 화면 — sw_clicker의 upgrade_screen 매핑.
-/// 3 서브탭: 터치 (탭 강화) / 동료 (광부) / 곡괭이 (메인 곡괭이 7스탯)
+/// 강화 화면 — 3 서브탭: 터치 / 동료 / 곡괭이.
 class UpgradeScreen extends ConsumerWidget {
   const UpgradeScreen({super.key});
 
@@ -160,14 +159,19 @@ class _TapTab extends ConsumerWidget {
       itemBuilder: (_, i) {
         final def = kTapUpgrades[i];
         final lv = state.tapUpgrades[def.id] ?? 0;
+
+        // 항상 다음 +1 비용 (코인 없어도 보임)
+        final nextCost = TapUpgradeBalance.upgradeCost(def, lv);
+        final addedNow = BigNumberFormat.format(lv * def.tapOrePerLevel);
+        final addedNext =
+            BigNumberFormat.format((lv + 1) * def.tapOrePerLevel);
+
+        // 일괄 구매 가능한 횟수와 합계 (코인 부족 시 0)
         final plan = game.previewBulk(
           currentLevel: lv,
           cap: null,
           costFn: (l) => TapUpgradeBalance.upgradeCost(def, l),
         );
-        final addedNow = BigNumberFormat.format(lv * def.tapOrePerLevel);
-        final addedNext =
-            BigNumberFormat.format((lv + 1) * def.tapOrePerLevel);
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -175,13 +179,13 @@ class _TapTab extends ConsumerWidget {
             title: def.name,
             icon: def.icon,
             iconColor: def.accent,
-            subtitle:
-                '${def.description} (현재 +$addedNow → +$addedNext)',
-            hint: '레벨업 비용 ×1.10',
+            subtitle: '${def.description} (현재 +$addedNow)',
             levelBadge: 'Lv.$lv',
+            nextStepCost: nextCost,
+            nextStepGain: '탭당 +$addedNext',
+            bulkTimes: plan.times == 0 ? 1 : plan.times,
+            bulkTotalCost: plan.times > 0 ? plan.cost : null,
             buttonLabel: '강화',
-            buttonTimes: plan.times,
-            cost: plan.times > 0 ? plan.cost : null,
             enabled: plan.times > 0,
             onTap: () => _snack(context, game.upgradeTap(def.id)),
           ),
@@ -206,15 +210,18 @@ class _CompanionTab extends ConsumerWidget {
       itemBuilder: (_, i) {
         final def = kProducers[i];
         final lv = state.producers[def.id]?.level ?? 0;
+
+        final nextCost = ProducerBalance.upgradeCost(def, lv);
+        final ops = ProducerBalance.orePerSec(def, lv);
+        final nextOps = lv == 0
+            ? def.baseOrePerSec
+            : ProducerBalance.orePerSec(def, lv + 1);
+
         final plan = game.previewBulk(
           currentLevel: lv,
           cap: null,
           costFn: (l) => ProducerBalance.upgradeCost(def, l),
         );
-        final ops = ProducerBalance.orePerSec(def, lv);
-        final nextOps = lv == 0
-            ? def.baseOrePerSec
-            : ProducerBalance.orePerSec(def, lv + 1);
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -224,13 +231,16 @@ class _CompanionTab extends ConsumerWidget {
             iconColor: def.accent,
             emoji: def.emoji,
             subtitle: lv == 0
-                ? '미영입 (Lv1: ${BigNumberFormat.format(def.baseOrePerSec)} 광석/초)'
-                : '${BigNumberFormat.format(ops)} → ${BigNumberFormat.format(nextOps)} 광석/초',
-            hint: '25/50/100/250/500 레벨 마일스톤마다 ×2',
+                ? '미영입'
+                : '${BigNumberFormat.format(ops)} 광석/초',
             levelBadge: lv == 0 ? '미영입' : 'Lv.$lv',
+            nextStepCost: nextCost,
+            nextStepGain: lv == 0
+                ? '영입 시 ${BigNumberFormat.format(def.baseOrePerSec)} 광석/초'
+                : '→ ${BigNumberFormat.format(nextOps)} 광석/초',
+            bulkTimes: plan.times == 0 ? 1 : plan.times,
+            bulkTotalCost: plan.times > 0 ? plan.cost : null,
             buttonLabel: lv == 0 ? '영입' : '강화',
-            buttonTimes: plan.times,
-            cost: plan.times > 0 ? plan.cost : null,
             enabled: plan.times > 0,
             onTap: () => _snack(context, game.upgradeProducer(def.id)),
           ),
@@ -261,8 +271,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.damageLevel,
           cap: null,
           costFn: PickaxeBalance.damageUpgradeCost,
-          subtitle: '곡괭이질 1번에 광석 ${PickaxeBalance.orePerSwing(pickaxe)}개',
-          hint: '강화하면 한 번에 캐는 광석이 늘어납니다.',
+          subtitleNow:
+              '곡괭이질 1번에 광석 ${PickaxeBalance.orePerSwing(pickaxe)}개',
+          gainNext:
+              '→ ${PickaxeBalance.orePerSwing(pickaxe.copyWith(damageLevel: pickaxe.damageLevel + 1))}개',
           onUpgrade: () => game.upgradePickaxeDamage(),
         ),
         _row(
@@ -274,9 +286,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.speedLevel,
           cap: null,
           costFn: PickaxeBalance.speedUpgradeCost,
-          subtitle:
+          subtitleNow:
               '간격 ${PickaxeBalance.swingInterval(pickaxe).toStringAsFixed(2)}초',
-          hint: '강화하면 더 빠르게 채굴합니다.',
+          gainNext:
+              '→ ${PickaxeBalance.swingInterval(pickaxe.copyWith(speedLevel: pickaxe.speedLevel + 1)).toStringAsFixed(2)}초',
           onUpgrade: () => game.upgradePickaxeSpeed(),
         ),
         _row(
@@ -288,9 +301,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.critChanceLevel,
           cap: PickaxeBalance.critChanceCap,
           costFn: PickaxeBalance.critChanceUpgradeCost,
-          subtitle:
+          subtitleNow:
               '현재 확률 ${game.currentCritChance.toStringAsFixed(1)}%',
-          hint: '레벨당 +0.5%, 최대 +25%까지',
+          gainNext:
+              '→ +0.5%p (총 ${(game.currentCritChance + 0.5).toStringAsFixed(1)}%)',
           onUpgrade: () => game.upgradeCritChance(),
         ),
         _row(
@@ -302,9 +316,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.critPowerLevel,
           cap: PickaxeBalance.critPowerCap,
           costFn: PickaxeBalance.critPowerUpgradeCost,
-          subtitle:
+          subtitleNow:
               '크리티컬 시 ×${game.currentCritMultiplier.toStringAsFixed(1)}',
-          hint: '레벨당 +0.2배, 최대 ×8까지',
+          gainNext:
+              '→ ×${(game.currentCritMultiplier + 0.2).toStringAsFixed(1)}',
           onUpgrade: () => game.upgradeCritPower(),
         ),
         _row(
@@ -316,9 +331,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.smeltLevel,
           cap: PickaxeBalance.smeltCap,
           costFn: PickaxeBalance.smeltUpgradeCost,
-          subtitle:
+          subtitleNow:
               '환전 보너스 +${(game.currentSellBonus * 100).toStringAsFixed(0)}%',
-          hint: '광석을 팔 때 받는 코인이 늘어납니다',
+          gainNext:
+              '→ +${(game.currentSellBonus * 100 + 1).toStringAsFixed(0)}%',
           onUpgrade: () => game.upgradeSmelt(),
         ),
         _row(
@@ -330,9 +346,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.chainMineLevel,
           cap: PickaxeBalance.chainMineCap,
           costFn: PickaxeBalance.chainMineUpgradeCost,
-          subtitle:
+          subtitleNow:
               '확률 ${PickaxeBalance.chainMineProb(pickaxe.chainMineLevel).toStringAsFixed(1)}%',
-          hint: '탭 후 확률적으로 즉시 한 번 더 휘두릅니다',
+          gainNext:
+              '→ ${PickaxeBalance.chainMineProb(pickaxe.chainMineLevel + 1).toStringAsFixed(1)}%',
           onUpgrade: () => game.upgradeChainMine(),
         ),
         _row(
@@ -344,9 +361,10 @@ class _PickaxeTab extends ConsumerWidget {
           level: pickaxe.luckLevel,
           cap: PickaxeBalance.luckCap,
           costFn: PickaxeBalance.luckUpgradeCost,
-          subtitle:
+          subtitleNow:
               '신규 발견 시 보석 +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel)}',
-          hint: '광석 신규 발견 시 받는 보석이 늘어납니다',
+          gainNext:
+              '→ +${3 + PickaxeBalance.luckGemBonus(pickaxe.luckLevel + 1)}',
           onUpgrade: () => game.upgradeLuck(),
         ),
       ],
@@ -362,11 +380,12 @@ class _PickaxeTab extends ConsumerWidget {
     required int level,
     required int? cap,
     required double Function(int level) costFn,
-    required String subtitle,
-    required String hint,
+    required String subtitleNow,
+    required String gainNext,
     required ActionResult Function() onUpgrade,
   }) {
     final atCap = cap != null && level >= cap;
+    final nextCost = atCap ? null : costFn(level);
     final plan = game.previewBulk(
       currentLevel: level,
       cap: cap,
@@ -378,12 +397,14 @@ class _PickaxeTab extends ConsumerWidget {
         title: title,
         icon: icon,
         iconColor: color,
-        subtitle: subtitle,
-        hint: atCap ? '최대 레벨에 도달했습니다.' : hint,
+        subtitle: subtitleNow,
         levelBadge: cap == null ? 'Lv.$level' : '$level/$cap',
-        buttonLabel: atCap ? '최대' : '강화',
-        buttonTimes: plan.times,
-        cost: atCap ? null : (plan.times > 0 ? plan.cost : null),
+        atMax: atCap,
+        nextStepCost: nextCost,
+        nextStepGain: atCap ? null : gainNext,
+        bulkTimes: plan.times == 0 ? 1 : plan.times,
+        bulkTotalCost: plan.times > 0 ? plan.cost : null,
+        buttonLabel: '강화',
         enabled: !atCap && plan.times > 0,
         onTap: () => _snack(context, onUpgrade()),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/big_number.dart';
+// ignore_for_file: unused_import
 import '../../data/balance/prestige_data.dart';
 import '../providers/game_provider.dart';
 import '../widgets/upgrade_card.dart';
@@ -139,23 +140,29 @@ class PrestigeScreen extends ConsumerWidget {
         ...kPrestigeNodes.map((def) {
           final lv = state.prestigeLevels[def.id] ?? 0;
           final atMax = lv >= def.maxLevel;
-          final cost = atMax ? 0 : prestigeNodeCost(def, lv);
-          final canBuy = !atMax && state.stardust >= cost.ceil();
+          final cost = atMax ? 0.0 : prestigeNodeCost(def, lv);
+          final costInt = cost.ceil();
+          final canBuy = !atMax && state.stardust >= costInt;
+
+          // 환생 트리는 단발 — 다음 +1만 보여주고 일괄 합계는 항상 동일
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: UpgradeCard(
               title: def.name,
               icon: def.icon,
               iconColor: def.accent,
-              subtitle: def.description,
-              hint: atMax
-                  ? '최대 레벨'
-                  : '비용 ×${def.growthRate.toStringAsFixed(2)} (캡 Lv.${def.maxLevel})',
-              levelBadge: atMax ? 'MAX' : 'Lv.$lv',
-              buttonLabel: atMax ? '최대' : '강화',
-              buttonTimes: 1,
-              cost: atMax ? null : cost.toDouble(),
+              subtitle:
+                  '${def.description}\n현재 보유 별의 결정: ${state.stardust}개',
+              levelBadge: atMax ? 'MAX' : 'Lv.$lv / ${def.maxLevel}',
+              atMax: atMax,
+              nextStepCost: atMax ? null : costInt.toDouble(),
+              nextStepGain: atMax ? null : '→ Lv.${lv + 1}',
+              bulkTimes: 1,
+              bulkTotalCost: null, // 단발 — 일괄 라인 생략
+              buttonLabel: '강화',
               enabled: canBuy,
+              costColor: AppColors.gold,
+              costIcon: Icons.star,
               onTap: () {
                 final r = game.upgradePrestigeNode(def.id);
                 if (!r.ok && r.message != null) {
