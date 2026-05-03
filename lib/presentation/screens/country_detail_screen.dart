@@ -204,6 +204,36 @@ class _PriceCard extends StatelessWidget {
   }
 }
 
+/// 가격 OHLC 봉 1개 (10초 단위로 묶음)
+class _Candle {
+  final double open;
+  final double high;
+  final double low;
+  final double close;
+  const _Candle(this.open, this.high, this.low, this.close);
+}
+
+/// 1초 가격 히스토리를 [kCandleSeconds]초 단위로 묶어 OHLC 캔들 리스트로 변환.
+/// 가장 최근 부분이 [kCandleSeconds]초가 안 차면 진행 중 봉으로 포함.
+List<_Candle> _buildCandles(List<double> history) {
+  if (history.isEmpty) return const [];
+  final candles = <_Candle>[];
+  for (int start = 0; start < history.length; start += kCandleSeconds) {
+    final end = (start + kCandleSeconds).clamp(0, history.length);
+    if (end <= start) break;
+    double o = history[start];
+    double h = o, l = o, c = o;
+    for (int i = start; i < end; i++) {
+      final v = history[i];
+      if (v > h) h = v;
+      if (v < l) l = v;
+      c = v;
+    }
+    candles.add(_Candle(o, h, l, c));
+  }
+  return candles;
+}
+
 class _Sparkline extends StatelessWidget {
   const _Sparkline({required this.market, required this.intrinsic});
   final CountryState market;
@@ -211,62 +241,102 @@ class _Sparkline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final candles = _buildCandles(market.priceHistory);
     return Container(
-      height: 120,
-      padding: const EdgeInsets.all(12),
+      height: 160,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
       decoration: BoxDecoration(
         color: AppColors.cardBackgroundLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.dividerColor),
       ),
-      child: market.priceHistory.length < 2
-          ? const Center(
-              child: Text(
-                '가격 데이터 수집 중…',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '10초 봉',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            )
-          : CustomPaint(
-              size: Size.infinite,
-              painter: _SparkPainter(
-                history: market.priceHistory,
-                intrinsic: intrinsic,
+              const SizedBox(width: 6),
+              Text(
+                '· ${candles.length}봉 (최대 10분)',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: candles.isEmpty
+                ? const Center(
+                    child: Text(
+                      '가격 데이터 수집 중…',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  )
+                : CustomPaint(
+                    size: Size.infinite,
+                    painter: _CandlePainter(
+                      candles: candles,
+                      intrinsic: intrinsic,
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _SparkPainter extends CustomPainter {
-  _SparkPainter({required this.history, required this.intrinsic});
-  final List<double> history;
+class _CandlePainter extends CustomPainter {
+  _CandlePainter({required this.candles, required this.intrinsic});
+  final List<_Candle> candles;
   final double intrinsic;
+
+  static const Color _upColor = Color(0xFFFF6B5C); // 한국식 빨강 = 상승
+  static final Color _downColor = AppColors.crystalTeal;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (history.length < 2) return;
-    double minV = history.first;
-    double maxV = history.first;
-    for (final v in history) {
-      if (v < minV) minV = v;
-      if (v > maxV) maxV = v;
+    if (candles.isEmpty) return;
+
+    // 가격 범위 계산 — 모든 봉의 high/low + 기준가 포함
+    double minV = candles.first.low;
+    double maxV = candles.first.high;
+    for (final c in candles) {
+      if (c.low < minV) minV = c.low;
+      if (c.high > maxV) maxV = c.high;
     }
-    // 기준가 라인을 보이게 범위 확장
     if (intrinsic > maxV) maxV = intrinsic;
     if (intrinsic < minV) minV = intrinsic;
+    // 위아래 5% 패딩
+    final pad = (maxV - minV) * 0.05;
+    minV -= pad;
+    maxV += pad;
     final range = (maxV - minV).abs() < 1e-9 ? 1.0 : (maxV - minV);
 
-    double xFor(int i) =>
-        (i / (history.length - 1)) * size.width;
     double yFor(double v) =>
         size.height - ((v - minV) / range) * size.height;
 
+    // 봉 폭 (간격 포함)
+    final slot = size.width / candles.length;
+    final bodyW = (slot * 0.7).clamp(2.0, 14.0);
+
     // 기준가 점선
     final basePaint = Paint()
-      ..color = AppColors.textSecondary.withValues(alpha: 0.4)
+      ..color = AppColors.textSecondary.withValues(alpha: 0.35)
       ..strokeWidth = 1;
     final baseY = yFor(intrinsic);
     for (double x = 0; x < size.width; x += 6) {
@@ -277,52 +347,41 @@ class _SparkPainter extends CustomPainter {
       );
     }
 
-    // 라인
-    final last = history.last;
-    final isUp = last >= history.first;
-    final color = isUp
-        ? const Color(0xFFFF6B5C) // 매수 우세 = 상승 빨강 (한국식)
-        : AppColors.crystalTeal;
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    // 봉 그리기
+    for (int i = 0; i < candles.length; i++) {
+      final c = candles[i];
+      final isUp = c.close >= c.open;
+      final color = isUp ? _upColor : _downColor;
+      final cx = slot * (i + 0.5);
 
-    final path = Path()..moveTo(xFor(0), yFor(history[0]));
-    for (int i = 1; i < history.length; i++) {
-      path.lineTo(xFor(i), yFor(history[i]));
+      // 꼬리 (high ↔ low)
+      canvas.drawLine(
+        Offset(cx, yFor(c.high)),
+        Offset(cx, yFor(c.low)),
+        Paint()
+          ..color = color
+          ..strokeWidth = 1.4,
+      );
+
+      // 몸통 (open ↔ close)
+      final yOpen = yFor(c.open);
+      final yClose = yFor(c.close);
+      final top = yOpen < yClose ? yOpen : yClose;
+      final bottom = yOpen < yClose ? yClose : yOpen;
+      final bodyRect = Rect.fromLTRB(
+        cx - bodyW / 2,
+        top,
+        cx + bodyW / 2,
+        // 몸통이 너무 얇으면 최소 1px 보장
+        (bottom - top) < 1 ? top + 1 : bottom,
+      );
+      canvas.drawRect(bodyRect, Paint()..color = color);
     }
-    canvas.drawPath(path, linePaint);
-
-    // 면 색상
-    final fill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          color.withValues(alpha: 0.30),
-          color.withValues(alpha: 0.0),
-        ],
-      ).createShader(Offset.zero & size);
-    final fillPath = Path.from(path)
-      ..lineTo(xFor(history.length - 1), size.height)
-      ..lineTo(xFor(0), size.height)
-      ..close();
-    canvas.drawPath(fillPath, fill);
-
-    // 마지막 점
-    canvas.drawCircle(
-      Offset(xFor(history.length - 1), yFor(last)),
-      3,
-      Paint()..color = color,
-    );
   }
 
   @override
-  bool shouldRepaint(covariant _SparkPainter old) =>
-      old.history != history;
+  bool shouldRepaint(covariant _CandlePainter old) =>
+      old.candles != candles;
 }
 
 class _HoldingsCard extends StatelessWidget {

@@ -112,8 +112,11 @@ CountryDef? countryForRank(int rank) {
 /// 거래 수수료 (매수/매도 양쪽에 적용)
 const double kStockTradeFee = 0.02;
 
-/// 가격 히스토리 보관 길이 (초)
-const int kPriceHistoryLength = 60;
+/// 가격 히스토리 보관 길이 (초). 10초 캔들 60개 = 10분 표시.
+const int kPriceHistoryLength = 600;
+
+/// 캔들 1개당 묶이는 틱 수 (= 초)
+const int kCandleSeconds = 10;
 
 /// 매 초 한 번 호출 — 다음 1주 가격을 결정.
 ///
