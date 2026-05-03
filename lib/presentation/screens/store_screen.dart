@@ -44,20 +44,20 @@ class StoreScreen extends ConsumerWidget {
               unselectedLabelStyle:
                   TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               tabs: [
-                Tab(height: 36, text: '거래소'),
                 Tab(height: 36, text: '도감'),
                 Tab(height: 36, text: '조수'),
                 Tab(height: 36, text: '정수'),
+                Tab(height: 36, text: '거래소'),
               ],
             ),
           ),
           const Expanded(
             child: TabBarView(
               children: [
-                MarketView(),
                 _OreCodexTab(),
                 _HelperTab(),
                 _EssenceTab(),
+                MarketView(),
               ],
             ),
           ),

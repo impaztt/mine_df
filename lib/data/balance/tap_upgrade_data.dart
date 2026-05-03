@@ -12,7 +12,7 @@ const List<TapUpgradeDef> kTapUpgrades = [
     description: '탭당 광석 +1',
     icon: Icons.fitness_center,
     accent: Color(0xFF90CAF9),
-    baseCost: 270,
+    baseCost: 90,
     tapOrePerLevel: 1,
   ),
   TapUpgradeDef(
