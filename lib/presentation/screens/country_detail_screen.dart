@@ -509,34 +509,44 @@ class _OrderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // 수량 ±
+          // 수량 표시
+          Container(
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.dividerColor),
+            ),
+            child: Text(
+              '${BigNumberFormat.format(shares.toDouble())} 주',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          // 슬라이더 — 1 ~ max(MAX매수, 보유주식, 1)
+          _SharesSlider(
+            value: shares,
+            maxBuy: maxBuy,
+            owned: market.shares,
+            onChanged: onSharesChanged,
+          ),
+          const SizedBox(height: 4),
+          // ± 빠른 조정 버튼
           Row(
             children: [
-              _qtyButton('-100', () => onSharesChanged((shares - 100).clamp(1, 1 << 30))),
+              _qtyButton('-100',
+                  () => onSharesChanged((shares - 100).clamp(1, 1 << 30))),
               const SizedBox(width: 4),
-              _qtyButton('-10', () => onSharesChanged((shares - 10).clamp(1, 1 << 30))),
+              _qtyButton('-10',
+                  () => onSharesChanged((shares - 10).clamp(1, 1 << 30))),
               const SizedBox(width: 4),
-              _qtyButton('-1', () => onSharesChanged((shares - 1).clamp(1, 1 << 30))),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.dividerColor),
-                  ),
-                  child: Text(
-                    '${BigNumberFormat.format(shares.toDouble())} 주',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
+              _qtyButton(
+                  '-1', () => onSharesChanged((shares - 1).clamp(1, 1 << 30))),
+              const SizedBox(width: 4),
               _qtyButton('+1', () => onSharesChanged(shares + 1)),
               const SizedBox(width: 4),
               _qtyButton('+10', () => onSharesChanged(shares + 10)),
@@ -795,4 +805,48 @@ Color _priceColor(double mult) {
   if (mult >= 0.90) return AppColors.crystalTeal;
   if (mult >= 0.70) return AppColors.textSecondary;
   return const Color(0xFF6E5C8C);
+}
+
+/// 매수/매도 수량을 좌우로 부드럽게 조절하는 슬라이더.
+///
+/// 범위는 1 ~ max(MAX매수, 보유주식, 1). 매수도 매도도 같은 슬라이더로
+/// 조절 가능하므로 두 액션의 더 큰 값을 상한으로 잡는다.
+class _SharesSlider extends StatelessWidget {
+  const _SharesSlider({
+    required this.value,
+    required this.maxBuy,
+    required this.owned,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int maxBuy;
+  final int owned;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final upper = [maxBuy, owned, 1]
+        .reduce((a, b) => a > b ? a : b);
+    final clamped = value.clamp(1, upper);
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 4,
+        activeTrackColor: AppColors.gold,
+        inactiveTrackColor: AppColors.dividerColor,
+        thumbColor: AppColors.gold,
+        overlayColor: AppColors.gold.withValues(alpha: 0.18),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+      ),
+      child: Slider(
+        value: clamped.toDouble(),
+        min: 1,
+        max: upper.toDouble(),
+        divisions: upper > 1 ? (upper - 1).clamp(1, 10000) : null,
+        onChanged: upper > 1
+            ? (v) => onChanged(v.round().clamp(1, upper))
+            : null,
+      ),
+    );
+  }
 }

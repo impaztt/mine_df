@@ -441,17 +441,16 @@ class _EssenceTabState extends ConsumerState<_EssenceTab> {
                   }
                 : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: canAfford
-                  ? AppColors.crystalTeal
-                  : AppColors.dividerColor,
+              backgroundColor:
+                  canAfford ? AppColors.gold : AppColors.dividerColor,
+              foregroundColor:
+                  canAfford ? Colors.black : AppColors.textSecondary,
               minimumSize: const Size(double.infinity, 50),
             ),
             child: Text(
-              canAfford
-                  ? '+${stage + 1} 도전 (${BigNumberFormat.format(cost.coinCost)} 코인)'
-                  : '코인/보석 부족',
+              '+${stage + 1} 도전 (${BigNumberFormat.format(cost.coinCost)} 코인)',
               style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w800),
+                  fontSize: 14, fontWeight: FontWeight.w900),
             ),
           ),
         ],

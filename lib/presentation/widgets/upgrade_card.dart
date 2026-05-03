@@ -213,15 +213,16 @@ class _BuyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 색상 결정
+    // 색상 결정 — 활성 시 항상 gold (흑색 텍스트)로 통일.
+    // iconColor는 카드 좌측 아이콘/테두리 강조에만 사용.
     final Color bg;
     final Color fg;
     if (atMax) {
       bg = AppColors.dividerColor;
       fg = AppColors.textSecondary;
     } else if (affordable) {
-      bg = iconColor;
-      fg = Colors.white;
+      bg = AppColors.gold;
+      fg = Colors.black;
     } else {
       // 살 수 없을 때 — 회색이지만 텍스트는 그대로 보임
       bg = AppColors.dividerColor;
