@@ -7,6 +7,7 @@ import '../../data/balance/essence_data.dart';
 import '../../data/balance/helper_data.dart';
 import '../../data/balance/ore_data.dart';
 import '../providers/game_provider.dart';
+import '../widgets/ore_gem_icon.dart';
 import '../widgets/upgrade_card.dart';
 import 'market_view.dart';
 
@@ -184,21 +185,23 @@ class _OreCodexTab extends ConsumerWidget {
                   color: ore.color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: ColorFiltered(
-                  colorFilter: discovered
-                      ? const ColorFilter.mode(
-                          Colors.transparent, BlendMode.dst)
-                      : const ColorFilter.matrix([
-                          0, 0, 0, 0, 30, //
-                          0, 0, 0, 0, 30,
-                          0, 0, 0, 0, 30,
-                          0, 0, 0, 1, 0,
-                        ]),
-                  child: Text(
-                    ore.emoji,
-                    style: const TextStyle(fontSize: 30),
-                  ),
-                ),
+                child: discovered
+                    ? OreGemIcon(ore: ore, size: 42)
+                    : Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.dividerColor
+                              .withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.help_outline,
+                          color: AppColors.textSecondary,
+                          size: 22,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -269,8 +272,40 @@ class _HelperTab extends ConsumerWidget {
     final state = game.state;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: kHelpers.length,
-      itemBuilder: (_, i) {
+      itemCount: kHelpers.length + 1,
+      itemBuilder: (_, idx) {
+        if (idx == 0) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.tierEpic.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.tierEpic.withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.pets, color: AppColors.tierEpic, size: 14),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '조수는 영물 — 채굴 효율을 % 배수로 강화합니다 (광부와 다름)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.tierEpic,
+                      fontWeight: FontWeight.w800,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        final i = idx - 1;
         final def = kHelpers[i];
         final cur = state.helpers[def.id];
         final recruited = cur?.recruited ?? false;

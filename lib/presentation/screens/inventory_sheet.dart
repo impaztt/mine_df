@@ -6,6 +6,7 @@ import '../../core/utils/big_number.dart';
 import '../../data/balance/ore_data.dart';
 import '../../data/models/ore_type.dart';
 import '../providers/game_provider.dart';
+import '../widgets/ore_gem_icon.dart';
 
 /// 통합 인벤토리 시트 — 코인 + 모든 보유 광석.
 ///
@@ -249,7 +250,7 @@ class _OreRow extends StatelessWidget {
               color: ore.color.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(ore.emoji, style: const TextStyle(fontSize: 22)),
+            child: OreGemIcon(ore: ore, size: 32),
           ),
           const SizedBox(width: 12),
           Expanded(

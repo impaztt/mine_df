@@ -6,10 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/big_number.dart';
 import '../../data/balance/ore_data.dart';
+import '../../data/balance/producer_data.dart';
+import '../../data/models/game_state.dart';
 import '../../data/models/ore_type.dart';
 import '../game/starlit_mine_game.dart';
 import '../providers/game_provider.dart';
 import '../widgets/offline_reward_dialog.dart';
+import '../widgets/ore_gem_icon.dart';
 import 'inventory_sheet.dart';
 
 /// 홈 화면 — 광산. 게임 영역 + 통합 인벤토리 카드.
@@ -105,15 +108,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 builder: (_, ref, _) {
                   final game = ref.watch(gameProvider);
                   _maybeSyncGame(game);
-                  if (game.activeSpirit == null) {
-                    return const SizedBox.shrink();
-                  }
-                  return Positioned(
-                    top: 16,
-                    right: 16,
-                    child: _SpiritBadge(
-                      onTap: () => game.claimSpirit(),
-                    ),
+                  return Stack(
+                    children: [
+                      if (game.activeSpirit != null)
+                        Positioned(
+                          top: 16,
+                          right: 16,
+                          child: _SpiritBadge(
+                            onTap: () => game.claimSpirit(),
+                          ),
+                        ),
+                      // 광부 스트립 — 영입한 광부들을 좌측 하단에 표시
+                      Positioned(
+                        left: 8,
+                        right: 8,
+                        bottom: 8,
+                        child: _MinerStrip(state: game.state),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -412,6 +424,127 @@ class _SpiritBadge extends StatelessWidget {
   }
 }
 
+/// 영입한 광부들을 가로 스크롤로 보여주는 게임 캔버스 위 오버레이.
+/// 각 광부는 이모지 + 레벨 뱃지 + 곡괭이질 흔들림 애니메이션.
+class _MinerStrip extends StatelessWidget {
+  const _MinerStrip({required this.state});
+  final GameState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final recruited = <_MinerEntry>[];
+    for (final def in kProducers) {
+      final lv = state.producers[def.id]?.level ?? 0;
+      if (lv > 0) {
+        recruited.add(_MinerEntry(emoji: def.emoji, level: lv));
+      }
+    }
+    if (recruited.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.dividerColor),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.engineering,
+                color: AppColors.textSecondary, size: 14),
+            SizedBox(width: 6),
+            Text(
+              '광부를 영입하면 자동 채굴이 시작됩니다',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: recruited.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (_, i) => _MinerAvatar(entry: recruited[i], index: i),
+      ),
+    );
+  }
+}
+
+class _MinerEntry {
+  final String emoji;
+  final int level;
+  const _MinerEntry({required this.emoji, required this.level});
+}
+
+class _MinerAvatar extends StatelessWidget {
+  const _MinerAvatar({required this.entry, required this.index});
+  final _MinerEntry entry;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 42,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // 곡괭이질 — 위아래로 살짝 흔들림 (광부마다 위상 어긋나게)
+          Center(
+            child: Text(
+              entry.emoji,
+              style: const TextStyle(fontSize: 24),
+            )
+                .animate(
+                  onPlay: (c) => c.repeat(reverse: true),
+                  delay: (index * 120).ms,
+                )
+                .moveY(
+                  begin: 0,
+                  end: -3,
+                  duration: 500.ms,
+                  curve: Curves.easeInOut,
+                ),
+          ),
+          // 레벨 뱃지
+          Positioned(
+            right: 0,
+            bottom: -2,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.gold,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${entry.level}',
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _OreInventoryChip extends StatelessWidget {
   const _OreInventoryChip({
     required this.ore,
@@ -434,7 +567,7 @@ class _OreInventoryChip extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(ore.emoji, style: const TextStyle(fontSize: 20)),
+          OreGemIcon(ore: ore, size: 26),
           const SizedBox(width: 6),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,

@@ -47,7 +47,7 @@ class UpgradeScreen extends ConsumerWidget {
                   TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
               tabs: [
                 Tab(height: 36, text: '터치'),
-                Tab(height: 36, text: '동료'),
+                Tab(height: 36, text: '광부'),
                 Tab(height: 36, text: '곡괭이'),
               ],
             ),
@@ -385,8 +385,16 @@ class _TapTab extends ConsumerWidget {
     final state = game.state;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: kTapUpgrades.length,
-      itemBuilder: (_, i) {
+      itemCount: kTapUpgrades.length + 1,
+      itemBuilder: (_, idx) {
+        if (idx == 0) {
+          return const _RoleHint(
+            icon: Icons.touch_app,
+            color: AppColors.crystalTeal,
+            text: '화면을 한 번 탭할 때 캐는 광석량을 영구히 늘립니다',
+          );
+        }
+        final i = idx - 1;
         final def = kTapUpgrades[i];
         final lv = state.tapUpgrades[def.id] ?? 0;
 
@@ -418,7 +426,7 @@ class _TapTab extends ConsumerWidget {
   }
 }
 
-// ===== 동료 탭 (광부 13종) =====
+// ===== 광부 탭 (13종 자동 채굴) =====
 
 class _CompanionTab extends ConsumerWidget {
   const _CompanionTab();
@@ -429,8 +437,16 @@ class _CompanionTab extends ConsumerWidget {
     final state = game.state;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: kProducers.length,
-      itemBuilder: (_, i) {
+      itemCount: kProducers.length + 1,
+      itemBuilder: (_, idx) {
+        if (idx == 0) {
+          return const _RoleHint(
+            icon: Icons.engineering,
+            color: AppColors.gold,
+            text: '광부를 영입하면 1초마다 광석을 자동으로 캡니다 (수량형)',
+          );
+        }
+        final i = idx - 1;
         final def = kProducers[i];
         final lv = state.producers[def.id]?.level ?? 0;
 
@@ -479,6 +495,11 @@ class _PickaxeTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       children: [
+        const _RoleHint(
+          icon: Icons.handyman,
+          color: AppColors.gold,
+          text: '곡괭이의 7가지 스탯 — 자동/탭 채굴 모두에 적용됩니다',
+        ),
         _row(
           context,
           game: game,
@@ -628,6 +649,48 @@ void _snack(BuildContext context, ActionResult r) {
       SnackBar(
         content: Text(r.message!),
         duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+}
+
+/// 서브탭 상단의 한 줄 역할 안내.
+class _RoleHint extends StatelessWidget {
+  const _RoleHint({
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w800,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
